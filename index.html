@@ -234,6 +234,7 @@
             <div class="card form">
               <h2>Cladding pattern</h2>
               <p class="sub">Diameters are measured <b>over the insulation</b> — pipe OD + 2 × insulation thickness.</p>
+              <p class="note" style="margin:-8px 0 14px;">Patterns are developed on the outside diameter over the insulation; strictly the mean diameter (outside diameter minus one sheet thickness) is correct — at 0.8 mm sheet the circumference is overstated by about 2.5 mm (0.3%), within normal cladding practice.</p>
               <div class="subtabs" role="tablist" aria-label="Fitting">
                 <button type="button" data-fit="elbow" aria-selected="true">Gored elbow</button>
                 <button type="button" data-fit="straight" aria-selected="false">Straight jacket</button>
@@ -339,6 +340,7 @@
               </div>
               <div id="cladOrdsWrap">
                 <div class="ord-title">Ordinates — mark these on the sheet if you are laying out by hand</div>
+                <p class="note" id="cladOrdNote" style="margin:0 0 8px;"></p>
                 <div class="ords" id="cladOrds"></div>
               </div>
               <div class="howto">
@@ -380,7 +382,7 @@
               </form>
               <div class="msg" id="saddleMsg" role="status"></div>
               <div class="divider"></div>
-              <p class="note">Use the <b>outside diameters of the actual pipes</b> here — for a saddle the branch is cut to the header's outside surface. If the branch must pass through or sit inside a hole, allow your usual fit-up gap on top.</p>
+              <p class="note">Use the <b>outside diameters of the actual pipes</b> here — for a saddle the branch is cut to the header's outside surface. The header hole below is drawn to the branch OD — see the warning under “Hole in the header” before cutting it, and do not add a fit-up gap to the hole (a gap makes the hole bigger, not smaller).</p>
             </div>
 
             <div class="card out">
@@ -415,6 +417,7 @@
               <div class="ords" id="saddleOrds"></div>
               <h3 style="margin-top:18px;font-size:1rem;">Hole in the header</h3>
               <p class="cap">Where the branch lands — mark this outline on the header to cut the hole.</p>
+              <div class="msg warn" role="note"><b>Warning — hole size:</b> this outline is drawn to the branch <b>outside diameter (OD)</b>. For a <b>set-on</b> branch, cut the bore instead — OD minus two wall thicknesses — cutting the outline exactly leaves the hole oversize by about one wall thickness all round. For a <b>set-in / through</b> branch, the OD hole shown is correct.</div>
               <div class="preview" id="holePreview"></div>
               <div class="stats" id="holeStats"></div>
               <div class="howto">
@@ -493,7 +496,7 @@
                 <thead><tr><th>DN</th><th>NPS equiv.</th><th>OD EN 10220 (mm)</th><th>OD ASME (mm)</th><th></th></tr></thead>
                 <tbody id="enBody"></tbody>
               </table>
-              <p class="note" style="margin-top:10px;">EN 10220 Series 1 outside diameters (aligned with ISO 4200). DN is a label, not a measurement — DN50 pipe is 60.3&nbsp;mm across, not 50. Highlighted rows are where the European OD <b>differs</b> from the ASME OD for the same nominal size — most importantly DN65: <b>76.1&nbsp;mm (EN) vs 73.0&nbsp;mm (ASME)</b>. Pipe, fittings and cladding must all follow one standard at those sizes. EN 10220 lists diameters only; wall thickness comes from the product standard (e.g. EN 10216 / EN 10217), so no single European “Schedule 40” wall is shown.</p>
+              <p class="note" style="margin-top:10px;">EN 10220 Series 1 outside diameters (aligned with ISO 4200). DN is a label, not a measurement — DN50 pipe is 60.3&nbsp;mm across, not 50. Highlighted rows are where the European OD <b>differs</b> from the ASME OD for the same nominal size — most importantly DN65: <b>76.1&nbsp;mm (EN) vs 73.0&nbsp;mm (ASME)</b>. Pipe, fittings and cladding must all follow one standard at those sizes. EN 10220 also tabulates wall thicknesses and masses per unit length, but there is no single European “Schedule 40” wall, so no wall column is shown.</p>
             </div>
             <div class="msg" id="sizeMsg" role="status"></div>
             <p class="note" style="margin-top:12px;"><b>Use</b> loads that OD into the cladding tool's Pipe OD — or pick NPS / DN sizes directly from the preset lists in the cladding and saddle tools. For cladding, add 2 × insulation thickness to the OD. For saddles, use the OD of both pipes exactly as they are.</p>
@@ -537,7 +540,7 @@
           </div>
           <div class="cal-ctl">
             <button type="button" class="step-btn" id="calMinus" aria-label="Zoom out a step">−</button>
-            <input type="range" id="calRange" min="2" max="6" step="0.01" value="3.78" aria-label="Screen zoom — slide until the bar measures exactly 100 mm" />
+            <input type="range" id="calRange" min="2" max="7" step="0.01" value="3.78" aria-label="Screen zoom — slide until the bar measures exactly 100 mm" />
             <button type="button" class="step-btn" id="calPlus" aria-label="Zoom in a step">+</button>
             <div class="cal-read" id="calRead"></div>
           </div>
@@ -568,6 +571,7 @@
     var unit = "mm";               // display unit
     var U = function(){ return unit === "in" ? 25.4 : 1; };  // multiply display -> mm
     var paper = { w:210, h:297, name:"A4" };
+    var lastPrintPat = null;
     var PAPERS = { a4:{w:210,h:297,name:"A4"}, letter:{w:215.9,h:279.4,name:"Letter"}, a3:{w:297,h:420,name:"A3"} };
 
     function num(id){ var v = parseFloat($(id).value); return isFinite(v) ? v : 0; }
@@ -709,7 +713,7 @@
       return s;
     }
     function dxfFile(pat){
-      var out = ["0","SECTION","2","HEADER","9","$ACADVER","1","AC1021","9","$INSUNITS","70","4","0","ENDSEC","0","SECTION","2","ENTITIES"];
+      var out = ["0","SECTION","2","HEADER","9","$ACADVER","1","AC1021","9","$INSUNITS","70","4","9","$MEASUREMENT","70","1","0","ENDSEC","0","SECTION","2","ENTITIES"];
       pat.paths.forEach(function(p){
         out.push("0","LWPOLYLINE","100","AcDbEntity","8", p.type==="mark" ? "MARK" : "CUT","100","AcDbPolyline","90", String(p.pts.length),"70", p.closed ? "1":"0");
         p.pts.forEach(function(q){
@@ -742,7 +746,7 @@
           if(cI < cols-1) html += '<line x1="'+(MARGIN+pw-OVERLAP)+'" y1="'+MARGIN+'" x2="'+(MARGIN+pw-OVERLAP)+'" y2="'+(MARGIN+ph)+'" stroke="#000" stroke-width="0.3" stroke-dasharray="3 2"/>';
           if(rI < rows-1) html += '<line x1="'+MARGIN+'" y1="'+(MARGIN+ph-OVERLAP)+'" x2="'+(MARGIN+pw)+'" y2="'+(MARGIN+ph-OVERLAP)+'" stroke="#000" stroke-width="0.3" stroke-dasharray="3 2"/>';
           // scale bar + tile label in bottom margin
-          var by = paper.h - 5.5;
+          var by = paper.h - 12;
           html += '<line x1="'+MARGIN+'" y1="'+by+'" x2="'+(MARGIN+100)+'" y2="'+by+'" stroke="#000" stroke-width="0.5"/>';
           html += '<line x1="'+MARGIN+'" y1="'+(by-1.6)+'" x2="'+MARGIN+'" y2="'+(by+1.6)+'" stroke="#000" stroke-width="0.5"/>';
           html += '<line x1="'+(MARGIN+100)+'" y1="'+(by-1.6)+'" x2="'+(MARGIN+100)+'" y2="'+(by+1.6)+'" stroke="#000" stroke-width="0.5"/>';
@@ -755,6 +759,7 @@
     }
     function openPrint(pat){
       if(!pat) return;
+      lastPrintPat = pat;
       $("pageStyle").textContent = "@page { size: "+paper.name+"; margin: 0; }";
       $("sheets").innerHTML = buildSheets(pat);
       $("printView").classList.add("open");
@@ -790,7 +795,7 @@
         + "</svg>";
     }
     function setPx(v, fromUser){
-      pxPerMm = Math.min(6, Math.max(2, v));
+      pxPerMm = Math.min(7, Math.max(2, v));
       $("calRange").value = pxPerMm;
       if(fromUser) calibrated = true;
       renderScreen();
@@ -846,7 +851,13 @@
         renderClad();
       });
     });
-    $("paperSel").addEventListener("change", function(){ paper = PAPERS[this.value]; });
+    $("paperSel").addEventListener("change", function(){
+      paper = PAPERS[this.value];
+      $("pageStyle").textContent = "@page { size: "+paper.name+"; margin: 0; }";
+      if($("printView").classList.contains("open") && lastPrintPat){
+        $("sheets").innerHTML = buildSheets(lastPrintPat);
+      }
+    });
 
     function setUnit(u){
       if(u === unit) return;
@@ -947,6 +958,7 @@
       $("cladOrdsWrap").querySelector(".ord-title").textContent = piece==="end"
         ? "Ordinates — height of the end gore at each of 16 divisions (second line: middle-gore height at the same division)"
         : "Ordinates — top and bottom edge heights of the middle gore at each of 16 divisions";
+      $("cladOrdNote").textContent = "The table stops at x = C (the circumference); the pattern curve continues past x = C into the lap strip, following the same sine wave.";
     }
 
     function cladStraight(){
@@ -960,13 +972,14 @@
       previewSVG(PATTERNS.clad, $("cladPreview"));
       $("cladTitle").textContent = "Straight jacket — Ø "+fmt(Dc)+" "+unitName();
       $("cladCap").textContent = "Blank "+fmt(W)+" × "+fmt(L)+" "+unitName()+" incl. "+fmt(lap)+" lap (dashed line).";
-      var area = C*L;
+      var area = W*L;
       $("cladStats").innerHTML = statHTML([
         ["Ø over insulation", fmt(Dc), unitName()], ["Circumference", fmt(C), unitName()],
         ["Blank width", fmt(W), unitName()], ["Blank length", fmt(L), unitName()],
         ["Sheet area", (area/1e6).toFixed(3), "m²"], ["Weight", sheetWeight(area).toFixed(2), "kg"]
       ]);
       $("cladOrds").innerHTML = "";
+      $("cladOrdNote").textContent = "";
       $("cladOrdsWrap").querySelector(".ord-title").textContent = "No ordinates needed — a straight jacket is a plain rectangle.";
     }
 
@@ -996,8 +1009,8 @@
       PATTERNS.clad = { title:"Reducer cladding "+fmt(D1)+" → "+fmt(D2), width:maxX-minX, height:maxY-minY, paths:paths };
       previewSVG(PATTERNS.clad, $("cladPreview"));
       $("cladTitle").textContent = "Concentric reducer — "+fmt(D1)+" → "+fmt(D2)+" "+unitName();
-      $("cladCap").textContent = "Annular sector blank "+fmt(maxX-minX)+" × "+fmt(maxY-minY)+" "+unitName()+". Apex of the sector is the cone point — keep it off the sheet; only the band between the two arcs is cut.";
-      var area = (theta/2)*(Lout*Lout - Lin*Lin);
+      $("cladCap").textContent = "Annular sector blank "+fmt(maxX-minX)+" × "+fmt(maxY-minY)+" "+unitName()+". Apex of the sector is the cone point — keep it off the sheet; only the band between the two arcs is cut. The lap is measured at the large end — the lap arc tapers toward the small end by geometry.";
+      var area = ((theta+lapAng)/2)*(Lout*Lout - Lin*Lin);
       $("cladStats").innerHTML = statHTML([
         ["Slant height", fmt(s), unitName()], ["Outer sector radius", fmt(Lout), unitName()],
         ["Inner sector radius", fmt(Lin), unitName()], ["Sector angle", (theta*180/Math.PI).toFixed(1), "°"],
@@ -1009,6 +1022,7 @@
         ords += '<div class="ord"><div class="n">ARC '+(k+1)+' · '+(frac*100).toFixed(0)+'%</div><div class="a">outer arc '+fmt(frac*Math.PI*D1)+'</div><div class="b">radius '+fmt(Lout)+' / '+fmt(Lin)+'</div></div>';
       }
       $("cladOrds").innerHTML = ords;
+      $("cladOrdNote").textContent = "";
       $("cladOrdsWrap").querySelector(".ord-title").textContent = "Layout check — scribe both arcs from the sector apex with a trammel at these radii; the outer arc length must equal the large circumference ("+fmt(Math.PI*D1)+" "+unitName()+").";
     }
 
@@ -1032,6 +1046,7 @@
         ["Weight (disc)", sheetWeight(Math.PI*Rout*Rout).toFixed(2), "kg"]
       ]);
       $("cladOrds").innerHTML = "";
+      $("cladOrdNote").textContent = "";
       $("cladOrdsWrap").querySelector(".ord-title").textContent = "No ordinates needed — scribe the two circles from one centre point.";
     }
 
@@ -1076,7 +1091,7 @@
       PATTERNS.saddle = { title:"Saddle template branch Ø"+fmt(d)+" on header Ø"+fmt(D)+" at "+A+"°", width:Cb, height:H, paths:paths };
       previewSVG(PATTERNS.saddle, $("saddlePreview"));
       $("saddleTitle").textContent = "Branch wrap template — Ø "+fmt(d)+" on Ø "+fmt(D)+", "+A+"°";
-      $("saddleCap").textContent = "Template "+fmt(Cb)+" wide (branch circumference) × "+fmt(H)+" tall. Top edge is the square reference edge; cut along the curve.";
+      $("saddleCap").textContent = "Template "+fmt(Cb)+" wide (branch circumference) × "+fmt(H)+" tall. Top edge is the square reference edge; cut along the curve. The stated height includes a 2 mm trim allowance below the deepest cut.";
       $("saddleStats").innerHTML = statHTML([
         ["Branch circumference", fmt(Cb), unitName()],
         ["Max cut depth", fmt(depthMax), unitName()],
@@ -1117,7 +1132,8 @@
       var sel = $("of-angle").value;
       $("of-customWrap").style.display = sel === "custom" ? "block" : "none";
       var ang = sel === "custom" ? num("of-angnum") : parseFloat(sel);
-      if(!(ang>0 && ang<90)){ setMsg("offsetMsg","Elbow angle must be between 0° and 90° (exclusive).","err"); $("offsetStats").innerHTML=""; return; }
+      if(!(ang>0 && ang<=90)){ setMsg("offsetMsg","Elbow angle must be greater than 0° and at most 90°.","err"); $("offsetStats").innerHTML=""; return; }
+      if(off===0 && roll===0){ setMsg("offsetMsg","Offset and roll cannot both be zero.","err"); $("offsetStats").innerHTML=""; return; }
       setMsg("offsetMsg","");
       var trueOff = Math.sqrt(off*off + roll*roll);
       var rad = ang*Math.PI/180;
@@ -1276,7 +1292,7 @@
         var off = dim("of-offset"), roll = dim("of-roll");
         var sel = $("of-angle").value;
         var ang = sel === "custom" ? num("of-angnum") : parseFloat(sel);
-        if(!(ang>0 && ang<90)) return null;
+        if(!(ang>0 && ang<=90)) return null;
         var trueOff = Math.sqrt(off*off + roll*roll);
         if(!(trueOff>0)) return null;
         var rad = ang*Math.PI/180;
