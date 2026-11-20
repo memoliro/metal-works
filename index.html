@@ -177,16 +177,30 @@
       #printView.open{ display:block; position:fixed; inset:0; overflow:auto; background:rgba(10,16,20,.72); z-index:50; padding:18px 10px 40px; }
       #printView .pv-bar{ max-width:900px; margin:0 auto 12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; background:var(--panel); border-radius:10px; padding:10px 14px; }
       #printView .pv-bar p{ margin:0; font-size:.88rem; max-width:60ch; }
+      #printView .pv-controls{ display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; }
+      #printView .pv-ctl{ display:flex; align-items:center; gap:6px; font-size:.88rem; font-weight:600; }
       .sheet{ background:#fff; color:#000; margin:0 auto 14px; position:relative; box-shadow:0 4px 24px rgba(0,0,0,.45); }
       .sheet svg{ display:block; }
+
+      /* Single-tile viewing is on-screen only: the hiding below lives in
+         @media screen, and @media print forces every sheet visible, so
+         printing always outputs the full tile set. */
+      @media screen{
+        #printView.tile-one .sheet{ display:none; }
+        #printView.tile-one .sheet.tile-one-show{ display:block; }
+      }
 
       @media print{
         body{ background:#fff; }
         .screen-wrap{ display:none !important; }
-        #printView{ display:block !important; position:static; overflow:visible; background:none; padding:0; }
+        /* NOTE: this must target #printView.open (ID+class), not just
+           #printView (ID only) — the old ID-only rule lost the specificity
+           fight, leaving the overlay a fixed one-page scroll box in print
+           so only tile 1 ever reached the printer. */
+        #printView.open, #printView{ display:block !important; position:static !important; height:auto !important; overflow:visible !important; background:none !important; padding:0 !important; }
         #printView .pv-bar{ display:none !important; }
-        .sheet{ box-shadow:none; margin:0; page-break-after:always; }
-        .sheet:last-child{ page-break-after:auto; }
+        #printView .sheet, .sheet{ display:block !important; box-shadow:none; margin:0; page-break-after:always; break-after:page; }
+        .sheet:last-child{ page-break-after:auto; break-after:auto; }
       }
     </style>
   </head>
@@ -262,7 +276,7 @@
                 <div class="grid2">
                   <div class="field"><label for="ce-lap">Circumferential lap <span class="u-lab">(mm)</span></label><input class="dim" id="ce-lap" type="number" step="any" value="25" /></div>
                   <div class="field"><label for="ce-piece">Pattern piece</label>
-                    <select id="ce-piece"><option value="end">End gore (×2)</option><option value="mid">Middle gore</option></select>
+                    <select id="ce-piece"><option value="end">End gore (×2)</option><option value="mid">Middle gore (×3)</option></select>
                   </div>
                 </div>
               </form>
@@ -511,8 +525,26 @@
     <div id="printView" aria-hidden="true">
       <div class="pv-bar">
         <p><b>1:1 tiled sheets.</b> Use your browser's or device's print command on this view, at <b>Actual size / 100%</b>, fit-to-page <b>off</b>. Measure the 100&nbsp;mm bar on the first tile — if it is not exactly 100&nbsp;mm, fix the printer setting before cutting. Tape tiles together on the dashed overlap lines.</p>
-        <div class="actions" style="margin:0;">
-          <button type="button" id="pvClose">Close</button>
+        <div class="pv-controls">
+          <label class="pv-ctl" for="pvScopeSel">Print
+            <select id="pvScopeSel">
+              <option value="current" selected>Current piece</option>
+              <option value="all">All pieces</option>
+            </select>
+          </label>
+          <label class="pv-ctl" for="pvTileSel">Tile
+            <select id="pvTileSel"><option value="all">All tiles</option></select>
+          </label>
+          <label class="pv-ctl" for="pvOrientSel">Orientation
+            <select id="pvOrientSel">
+              <option value="portrait" selected>Portrait (vertical)</option>
+              <option value="landscape">Landscape</option>
+            </select>
+          </label>
+          <div class="actions" style="margin:0;">
+            <button type="button" id="pvPrint" class="primary">Print</button>
+            <button type="button" id="pvClose">Close</button>
+          </div>
         </div>
       </div>
       <div id="sheets"></div>
@@ -725,20 +757,101 @@
     }
     function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""); }
 
+    /* ---------- tiled 1:1 print: scope / orientation / tile selection ---------- */
+    var orient = "portrait";              // "portrait" | "landscape" — user-overridable per print view
+    var orientUserSet = false;            // true once the user picks an orientation in this print view
+    var printScope = "current";           // "current" piece | "all" pieces (elbow: end + middle gores)
+    var lastPrintTool = "clad";
+    var lastTileLabels = [];              // one label per sheet in #sheets order, across all pieces in scope
+    function effPaper(){   // paper dims as actually tiled (landscape swaps w/h)
+      return orient === "landscape" ? { w:paper.h, h:paper.w, name:paper.name } : paper;
+    }
+    function tileCountFor(pat, w, h){
+      var pw = w - 2*MARGIN, ph = h - 2*MARGIN;
+      var cols = Math.max(1, Math.ceil((pat.width - OVERLAP) / (pw - OVERLAP)));
+      var rows = Math.max(1, Math.ceil((pat.height - OVERLAP) / (ph - OVERLAP)));
+      return cols * rows;
+    }
+    function bestOrientForSet(set){   // default: whichever orientation needs fewer tiles in total (tie -> portrait)
+      var p = 0, l = 0;
+      set.forEach(function(it){ p += tileCountFor(it.pat, paper.w, paper.h); l += tileCountFor(it.pat, paper.h, paper.w); });
+      return l < p ? "landscape" : "portrait";
+    }
+    function bestOrient(pat){ return bestOrientForSet([{ pat:pat }]); }
+    function elbowMidCount(){ return Math.max(0, Math.round(num("ce-pieces")) - 2); }   // middle gores = pieces − 2
+    function applyPageStyle(){
+      $("pageStyle").textContent = "@page { size: "+paper.name+(orient==="landscape" ? " landscape" : "")+"; margin: 0; }";
+    }
+    function allElbowPieces(){
+      // Build both gore patterns with the exact same maths as the screen pattern:
+      // temporarily switch the piece selector, re-render, capture, restore.
+      var sel = $("ce-piece"), saved = sel.value, out = [];
+      try{
+        sel.value = "end"; renderClad();
+        if(PATTERNS.clad) out.push({ pat:PATTERNS.clad, label:"End gore (×2)" });
+        if(elbowMidCount() > 0){
+          sel.value = "mid"; renderClad();
+          if(PATTERNS.clad) out.push({ pat:PATTERNS.clad, label:"Middle gore (×"+elbowMidCount()+")" });
+        }
+      } finally {
+        sel.value = saved; renderClad();   // screen shows the originally selected piece again
+      }
+      return out;
+    }
+    function computePrintSet(){
+      if(printScope === "all" && lastPrintTool === "clad" && currentFit === "elbow"){
+        var all = allElbowPieces();
+        if(all.length) return all;
+      }
+      return [{ pat:lastPrintPat, label:null }];
+    }
+    function refreshTileSel(){
+      var sel = $("pvTileSel"); if(!sel) return;
+      var html = '<option value="all">All tiles</option>';
+      lastTileLabels.forEach(function(lb, i){ html += '<option value="'+i+'">'+lb+'</option>'; });
+      sel.innerHTML = html;
+      sel.value = "all";
+      $("printView").classList.remove("tile-one");
+      document.querySelectorAll("#sheets .sheet").forEach(function(s){ s.classList.remove("tile-one-show"); });
+    }
+    function renderPrintSheets(set){
+      if(!lastPrintPat) return;
+      lastTileLabels = [];
+      var html = "";
+      (set || computePrintSet()).forEach(function(it){ html += buildSheets(it.pat, it.label); });
+      $("sheets").innerHTML = html;
+      refreshTileSel();
+    }
+    function applyTileSel(){   // on-screen verification only — print CSS forces every sheet visible
+      var sel = $("pvTileSel"); if(!sel) return;
+      var v = sel.value, pv = $("printView");
+      var sheets = document.querySelectorAll("#sheets .sheet");
+      sheets.forEach(function(s){ s.classList.remove("tile-one-show"); });
+      if(v === "all"){ pv.classList.remove("tile-one"); return; }
+      var i = parseInt(v, 10);
+      if(!isFinite(i) || i < 0 || i >= sheets.length){ sel.value = "all"; pv.classList.remove("tile-one"); return; }
+      pv.classList.add("tile-one");
+      sheets[i].classList.add("tile-one-show");
+    }
+
     /* ---------- tiled 1:1 print ---------- */
     var MARGIN = 10, OVERLAP = 12;
-    function buildSheets(pat){
-      var pw = paper.w - 2*MARGIN, ph = paper.h - 2*MARGIN;
+    var sheetBuildNo = 0;   // keeps clip-path ids unique across pieces in an all-pieces set
+    function buildSheets(pat, label){
+      sheetBuildNo++;
+      var ep = effPaper();   // honours the orientation selector (swaps w/h in landscape)
+      var pw = ep.w - 2*MARGIN, ph = ep.h - 2*MARGIN;
       var stepX = pw - OVERLAP, stepY = ph - OVERLAP;
       var cols = Math.max(1, Math.ceil((pat.width - OVERLAP) / stepX));
       var rows = Math.max(1, Math.ceil((pat.height - OVERLAP) / stepY));
+      var tileLabel = label || pat.title;   // all-pieces sheets carry "Piece (×N)" instead of the pattern title
       var html = "";
       for(var rI=0; rI<rows; rI++){
         for(var cI=0; cI<cols; cI++){
           var tx = cI*stepX, ty = rI*stepY;
-          var clipId = "clip"+rI+"_"+cI;
-          html += '<div class="sheet" style="width:'+paper.w+'mm;height:'+paper.h+'mm">';
-          html += '<svg width="'+paper.w+'mm" height="'+paper.h+'mm" viewBox="0 0 '+paper.w+' '+paper.h+'">';
+          var clipId = "clip"+sheetBuildNo+"_"+rI+"_"+cI;
+          html += '<div class="sheet" style="width:'+ep.w+'mm;height:'+ep.h+'mm">';
+          html += '<svg width="'+ep.w+'mm" height="'+ep.h+'mm" viewBox="0 0 '+ep.w+' '+ep.h+'">';
           html += '<defs><clipPath id="'+clipId+'"><rect x="'+MARGIN+'" y="'+MARGIN+'" width="'+pw+'" height="'+ph+'"/></clipPath></defs>';
           html += '<rect x="'+MARGIN+'" y="'+MARGIN+'" width="'+pw+'" height="'+ph+'" fill="none" stroke="#999" stroke-width="0.25"/>';
           html += '<g clip-path="url(#'+clipId+')"><g transform="translate('+(MARGIN-tx).toFixed(2)+' '+(MARGIN-ty).toFixed(2)+')">'
@@ -746,28 +859,58 @@
           if(cI < cols-1) html += '<line x1="'+(MARGIN+pw-OVERLAP)+'" y1="'+MARGIN+'" x2="'+(MARGIN+pw-OVERLAP)+'" y2="'+(MARGIN+ph)+'" stroke="#000" stroke-width="0.3" stroke-dasharray="3 2"/>';
           if(rI < rows-1) html += '<line x1="'+MARGIN+'" y1="'+(MARGIN+ph-OVERLAP)+'" x2="'+(MARGIN+pw)+'" y2="'+(MARGIN+ph-OVERLAP)+'" stroke="#000" stroke-width="0.3" stroke-dasharray="3 2"/>';
           // scale bar + tile label in bottom margin
-          var by = paper.h - 12;
+          var by = ep.h - 12;
           html += '<line x1="'+MARGIN+'" y1="'+by+'" x2="'+(MARGIN+100)+'" y2="'+by+'" stroke="#000" stroke-width="0.5"/>';
           html += '<line x1="'+MARGIN+'" y1="'+(by-1.6)+'" x2="'+MARGIN+'" y2="'+(by+1.6)+'" stroke="#000" stroke-width="0.5"/>';
           html += '<line x1="'+(MARGIN+100)+'" y1="'+(by-1.6)+'" x2="'+(MARGIN+100)+'" y2="'+(by+1.6)+'" stroke="#000" stroke-width="0.5"/>';
           html += '<text x="'+(MARGIN+104)+'" y="'+(by+1.2)+'" font-family="sans-serif" font-size="3.2">100 mm — must measure exactly</text>';
-          html += '<text x="'+MARGIN+'" y="'+(MARGIN-3.5)+'" font-family="sans-serif" font-size="3.4">'+pat.title+' · tile '+(cI+1)+","+(rI+1)+' of '+cols+"×"+rows+'</text>';
+          html += '<text x="'+MARGIN+'" y="'+(MARGIN-3.5)+'" font-family="sans-serif" font-size="3.4">'+tileLabel+' · tile '+(cI+1)+","+(rI+1)+' of '+cols+"×"+rows+'</text>';
+          lastTileLabels.push(tileLabel+" · tile "+(cI+1)+","+(rI+1));
           html += "</svg></div>";
         }
       }
       return html;
     }
-    function openPrint(pat){
+    function openPrint(pat, toolkey){
       if(!pat) return;
       lastPrintPat = pat;
-      $("pageStyle").textContent = "@page { size: "+paper.name+"; margin: 0; }";
-      $("sheets").innerHTML = buildSheets(pat);
+      lastPrintTool = toolkey || "clad";
+      orientUserSet = false;
+      // Scope: a multi-piece elbow defaults to All pieces (the whole elbow in
+      // one print job); anything else prints the current piece only.
+      var multi = lastPrintTool === "clad" && currentFit === "elbow" && elbowMidCount() > 0;
+      $("pvScopeSel").querySelector('option[value="all"]').disabled = !multi;
+      printScope = multi ? "all" : "current";
+      $("pvScopeSel").value = printScope;
+      var set = computePrintSet();
+      orient = bestOrientForSet(set);           // default considers the whole set's tile count
+      $("pvOrientSel").value = orient;
+      applyPageStyle();
+      renderPrintSheets(set);
       $("printView").classList.add("open");
       $("printView").setAttribute("aria-hidden","false");
       $("printView").scrollTop = 0;
     }
     $("pvClose").addEventListener("click", function(){
       $("printView").classList.remove("open"); $("printView").setAttribute("aria-hidden","true");
+      $("printView").classList.remove("tile-one");
+    });
+    $("pvPrint").addEventListener("click", function(){ window.print(); });
+    $("pvTileSel").addEventListener("change", applyTileSel);
+    $("pvScopeSel").addEventListener("change", function(){
+      printScope = this.value;
+      var set = computePrintSet();
+      if(!orientUserSet){ orient = bestOrientForSet(set); $("pvOrientSel").value = orient; }
+      applyPageStyle();
+      renderPrintSheets(set);
+      $("printView").scrollTop = 0;
+    });
+    $("pvOrientSel").addEventListener("change", function(){
+      orient = this.value;
+      orientUserSet = true;
+      applyPageStyle();
+      renderPrintSheets();   // re-tiles for the new orientation; tile selector resets to All tiles
+      $("printView").scrollTop = 0;
     });
 
     /* ---------- on-screen 1:1 check ---------- */
@@ -826,7 +969,7 @@
         var pat = PATTERNS[btn.getAttribute("data-toolkey")];
         if(!pat) return;
         var act = btn.getAttribute("data-act");
-        if(act === "print") openPrint(pat);
+        if(act === "print") openPrint(pat, btn.getAttribute("data-toolkey"));
         else if(act === "svg") download(slug(pat.title)+".svg", svgFile(pat), "image/svg+xml");
         else if(act === "dxf") download(slug(pat.title)+".dxf", dxfFile(pat), "application/dxf");
       });
@@ -853,9 +996,9 @@
     });
     $("paperSel").addEventListener("change", function(){
       paper = PAPERS[this.value];
-      $("pageStyle").textContent = "@page { size: "+paper.name+"; margin: 0; }";
+      applyPageStyle();   // keeps the current orientation (user choice survives a paper change)
       if($("printView").classList.contains("open") && lastPrintPat){
-        $("sheets").innerHTML = buildSheets(lastPrintPat);
+        renderPrintSheets();
       }
     });
 
@@ -1050,11 +1193,27 @@
       $("cladOrdsWrap").querySelector(".ord-title").textContent = "No ordinates needed — scribe the two circles from one centre point.";
     }
 
+    function syncPieceOptions(){
+      // The piece dropdown always shows the cut count, derived from the gore
+      // number — end gores are always ×2, middle gores are pieces − 2.
+      var sel = $("ce-piece"); if(!sel) return;
+      var mid = elbowMidCount();
+      var endOpt = sel.querySelector('option[value="end"]');
+      var midOpt = sel.querySelector('option[value="mid"]');
+      if(endOpt) endOpt.textContent = "End gore (×2)";
+      if(midOpt){
+        midOpt.textContent = "Middle gore (×"+mid+")";
+        midOpt.disabled = mid <= 0;
+        if(mid <= 0 && sel.value === "mid"){ sel.value = "end"; renderClad(); }
+      }
+    }
+
     function renderClad(){
       if(currentFit === "elbow") cladElbow();
       else if(currentFit === "straight") cladStraight();
       else if(currentFit === "reducer") cladReducer();
       else cladCap();
+      syncPieceOptions();
     }
 
     /* ================= SADDLE ================= */
