@@ -1,0 +1,1448 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Pipe Tools</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style id="pageStyle"></style>
+    <style>
+      :root{
+        --bg:#e9edf0; --panel:#ffffff; --panel2:#f3f5f7; --ink:#18222b; --muted:#5a6a76;
+        --line:#cfd8de; --line2:#b9c6cf; --accent:#d9480f; --accent-ink:#ffffff;
+        --steel:#2f5d7c; --steel-soft:#dcebf5; --mark:#2f5d7c; --warn-bg:#fdf0e3; --warn-ink:#8a4a12;
+        --err-bg:#fdecec; --err-ink:#8f1d1d; --shadow:0 1px 3px rgba(20,35,48,.10);
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark){
+        :root{
+          --bg:#0e1317; --panel:#171f26; --panel2:#1e2831; --ink:#e9eff4; --muted:#97a8b5;
+          --line:#2b3842; --line2:#3a4a57; --accent:#ff7a29; --accent-ink:#1c1206;
+          --steel:#8fc0e4; --steel-soft:#22384a; --mark:#8fc0e4; --warn-bg:#3a2a16; --warn-ink:#f2c184;
+          --err-bg:#3d1d1d; --err-ink:#f3a9a9; --shadow:0 1px 3px rgba(0,0,0,.4);
+          color-scheme: dark;
+        }
+      }
+      *{ box-sizing:border-box; }
+      html{ -webkit-text-size-adjust:100%; }
+      body{ margin:0; background:var(--bg); color:var(--ink);
+        font-family:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif; font-size:16px; line-height:1.45; }
+      .mono{ font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      button, select, input{ font:inherit; color:inherit; }
+      button, [role="button"], select, input:not([type="checkbox"],[type="radio"]){ min-height:2.25rem; }
+      button{ cursor:pointer; }
+      :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+      .wrap{ max-width:1180px; margin:0 auto; padding:14px 14px 48px; }
+
+      /* Header strip */
+      .topbar{ display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; justify-content:space-between;
+        background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 16px; box-shadow:var(--shadow); }
+      .topbar h1{ font-size:1.22rem; margin:0; letter-spacing:.01em; }
+      .topbar h1 span{ color:var(--accent); }
+      .topbar p{ margin:2px 0 0; color:var(--muted); font-size:.88rem; max-width:56ch; }
+      .top-controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+      .ctl{ display:flex; flex-direction:column; gap:4px; }
+      .ctl label{ font-size:.72rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+      .seg{ display:flex; border:1px solid var(--line2); border-radius:8px; overflow:hidden; }
+      .seg button{ border:0; background:var(--panel2); padding:6px 14px; font-weight:600; min-height:2.25rem; }
+      .seg button[aria-pressed="true"]{ background:var(--steel); color:#fff; }
+      @media (prefers-color-scheme: dark){ .seg button[aria-pressed="true"]{ color:#0d1418; background:var(--steel); } }
+      select{ background:var(--panel); border:1px solid var(--line2); border-radius:8px; padding:6px 10px; }
+
+      /* Tool tabs */
+      .tabs{ display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+      .tabs button{ border:1px solid var(--line2); background:var(--panel); border-radius:999px; padding:8px 18px; font-weight:600; box-shadow:var(--shadow); }
+      .tabs button[aria-selected="true"]{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+
+      .tool{ display:none; }
+      .tool.active{ display:block; }
+      .layout{ display:grid; grid-template-columns:348px 1fr; gap:14px; align-items:start; }
+      @media (max-width:880px){ .layout{ grid-template-columns:1fr; } }
+
+      .card{ background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); }
+      .form{ padding:16px; }
+      .form h2{ font-size:1.02rem; margin:0 0 4px; }
+      .form .sub{ color:var(--muted); font-size:.86rem; margin:0 0 14px; }
+      .subtabs{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+      .subtabs button{ border:1px solid var(--line2); background:var(--panel2); border-radius:8px; padding:6px 12px; font-weight:600; font-size:.9rem; }
+      .subtabs button[aria-selected="true"]{ background:var(--steel); border-color:var(--steel); color:#fff; }
+      @media (prefers-color-scheme: dark){ .subtabs button[aria-selected="true"]{ color:#0d1418; } }
+      .fitform{ display:none; } .fitform.active{ display:block; }
+      .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+      .field{ display:flex; flex-direction:column; gap:4px; margin-bottom:10px; }
+      .field label{ font-size:.8rem; font-weight:600; color:var(--muted); }
+      .field .hint{ font-size:.74rem; color:var(--muted); font-weight:400; }
+      .field input, .field select{ width:100%; border:1px solid var(--line2); border-radius:8px; padding:7px 10px; background:var(--panel); font-family:"IBM Plex Mono",monospace; font-size:.95rem; }
+      .field select{ font-family:inherit; }
+      .divider{ border-top:1px dashed var(--line2); margin:14px 0; }
+      .note{ font-size:.82rem; color:var(--muted); }
+      .msg{ display:none; border-radius:8px; padding:9px 12px; font-size:.88rem; margin:10px 0; }
+      .msg.warn{ display:block; background:var(--warn-bg); color:var(--warn-ink); }
+      .msg.err{ display:block; background:var(--err-bg); color:var(--err-ink); }
+      .msg.info{ display:block; background:var(--steel-soft); color:var(--ink); }
+
+      /* Output side */
+      .out{ padding:16px; }
+      .out h3{ margin:0 0 2px; font-size:1rem; }
+      .out .cap{ color:var(--muted); font-size:.86rem; margin:0 0 10px; }
+      .preview{ background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px; }
+      .preview svg{ display:block; width:100%; height:auto; }
+      /* Rotating 3D preview (Three.js) — sits above the 2D pattern, never replaces it */
+      .p3d{ background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:10px; }
+      .p3d-head{ display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+      .p3d-head b{ font-size:.85rem; letter-spacing:.02em; }
+      .p3d-head span{ font-size:.78rem; color:var(--muted); }
+      .p3d-stage{ position:relative; height:210px; border-radius:6px; overflow:hidden; background:radial-gradient(120% 100% at 50% 0%, var(--panel) 0%, var(--panel2) 100%); }
+      .p3d-stage canvas{ display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+      .p3d-stage canvas:active{ cursor:grabbing; }
+      .p3d-cap{ font-size:.8rem; color:var(--muted); margin-top:6px; font-family:"IBM Plex Mono",monospace; }
+      .p3d-fallback{ position:absolute; inset:0; display:flex; flex-direction:column; gap:8px; align-items:center; justify-content:center; text-align:center; padding:12px; font-size:.86rem; color:var(--muted); }
+      .p3d-fallback button{ border:1px solid var(--line2); background:var(--panel); border-radius:8px; padding:6px 14px; font-weight:600; }
+      @media (max-width:560px){ .p3d-stage{ height:180px; } }
+      .stats{ display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:8px; margin:12px 0; }
+      .stat{ background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+      .stat .k{ font-size:.7rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+      .stat .v{ font-family:"IBM Plex Mono",monospace; font-size:1.02rem; font-weight:600; margin-top:1px; }
+      .stat .v small{ font-size:.72rem; color:var(--muted); font-weight:400; }
+      .actions{ display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 4px; }
+      .actions button{ border-radius:8px; padding:8px 14px; font-weight:600; border:1px solid var(--line2); background:var(--panel); display:inline-flex; align-items:center; gap:7px; }
+      .actions button.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+      .actions svg{ width:16px; height:16px; flex:none; }
+      .ord-title{ font-size:.92rem; font-weight:700; margin:16px 0 6px; }
+      .ords{ display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:6px; }
+      .ord{ border:1px solid var(--line); border-radius:7px; padding:6px 8px; background:var(--panel); }
+      .ord .n{ font-size:.68rem; color:var(--muted); font-weight:600; letter-spacing:.04em; }
+      .ord .a{ font-family:"IBM Plex Mono",monospace; font-size:.86rem; }
+      .ord .b{ font-family:"IBM Plex Mono",monospace; font-size:.86rem; color:var(--steel); }
+      .howto{ margin-top:14px; }
+      .howto h3{ font-size:1rem; margin:0 0 6px; }
+      .howto ol, .howto ul{ margin:0; padding-left:20px; color:var(--ink); }
+      .howto li{ margin-bottom:5px; font-size:.92rem; }
+      .howto li b{ font-weight:600; }
+
+      table.sizes{ width:100%; border-collapse:collapse; font-size:.9rem; }
+      table.sizes th, table.sizes td{ text-align:right; padding:7px 8px; border-bottom:1px solid var(--line); font-family:"IBM Plex Mono",monospace; }
+      table.sizes th{ font-family:inherit; font-size:.74rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+      table.sizes td:first-child, table.sizes th:first-child{ text-align:left; font-family:inherit; font-weight:600; }
+      table.sizes td:last-child, table.sizes th:last-child{ text-align:right; }
+      table.sizes tr.diff td{ background:var(--warn-bg); color:var(--warn-ink); }
+      table.sizes tr.diff td:first-child{ color:var(--ink); }
+      .use-btn{ border:1px solid var(--line2); background:var(--panel); border-radius:7px; padding:4px 10px; font-weight:600; font-size:.82rem; font-family:inherit; white-space:nowrap; min-height:2rem; }
+      .use-btn:hover{ border-color:var(--steel); color:var(--steel); }
+      @media (max-width:560px){
+        table.sizes{ font-size:.8rem; }
+        table.sizes th, table.sizes td{ padding:6px 4px; }
+        .use-btn{ padding:3px 7px; font-size:.78rem; }
+      }
+      .std-head{ display:flex; flex-wrap:wrap; gap:10px 16px; align-items:end; justify-content:space-between; }
+      .foot{ margin-top:22px; color:var(--muted); font-size:.82rem; max-width:75ch; }
+
+      /* On-screen 1:1 check */
+      #screenView{ display:none; }
+      #screenView.open{ display:block; position:fixed; inset:0; overflow:auto; background:var(--bg); z-index:60; padding:14px 10px 44px; }
+      #screenView .sv-inner{ max-width:980px; margin:0 auto; }
+      #screenView .sv-bar{ display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; justify-content:space-between; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; box-shadow:var(--shadow); }
+      #screenView .sv-bar h2{ font-size:1.05rem; margin:0 0 2px; }
+      #screenView .sv-bar p{ margin:0; font-size:.88rem; color:var(--muted); max-width:62ch; }
+      .sv-card{ background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:14px; margin-top:12px; }
+      .sv-card h3{ margin:0 0 4px; font-size:.98rem; }
+      .sv-card .cap{ color:var(--muted); font-size:.86rem; margin:0 0 10px; }
+      .cal-scroll{ overflow-x:auto; padding:10px 2px 4px; }
+      .cal-bar{ position:relative; height:34px; margin:0 auto; background:var(--steel-soft); border:2px solid var(--steel); border-radius:4px; }
+      .cal-bar::before, .cal-bar::after{ content:""; position:absolute; top:-7px; bottom:-7px; width:2px; background:var(--accent); }
+      .cal-bar::before{ left:-2px; } .cal-bar::after{ right:-2px; }
+      .cal-bar span{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:.9rem; }
+      .cal-ends{ display:flex; justify-content:space-between; margin:8px auto 0; font-family:"IBM Plex Mono",monospace; font-size:.78rem; color:var(--muted); }
+      .cal-ctl{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:12px; }
+      .cal-ctl input[type="range"]{ flex:1 1 220px; accent-color:var(--accent); min-height:2.25rem; }
+      .cal-ctl .step-btn{ width:2.5rem; border:1px solid var(--line2); background:var(--panel); border-radius:8px; font-weight:700; font-size:1.05rem; }
+      .cal-read{ font-family:"IBM Plex Mono",monospace; font-size:.86rem; color:var(--muted); width:100%; }
+      .cal-read b{ color:var(--ink); }
+      .sv-pats{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+      .sv-pats button{ border:1px solid var(--line2); background:var(--panel2); border-radius:8px; padding:6px 12px; font-weight:600; font-size:.9rem; }
+      .sv-pats button[aria-selected="true"]{ background:var(--steel); border-color:var(--steel); color:#fff; }
+      @media (prefers-color-scheme: dark){ .sv-pats button[aria-selected="true"]{ color:#0d1418; } }
+      .sv-stage{ overflow:auto; max-height:62vh; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px; }
+      .sv-stage svg{ display:block; background:var(--panel); border:1px solid var(--line); }
+      .sv-ok{ display:none; border-radius:8px; padding:9px 12px; font-size:.9rem; margin-top:10px; background:var(--steel-soft); }
+      .sv-ok.show{ display:block; }
+
+      /* Print view overlay */
+      #printView{ display:none; }
+      #printView.open{ display:block; position:fixed; inset:0; overflow:auto; background:rgba(10,16,20,.72); z-index:50; padding:18px 10px 40px; }
+      #printView .pv-bar{ max-width:900px; margin:0 auto 12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; background:var(--panel); border-radius:10px; padding:10px 14px; }
+      #printView .pv-bar p{ margin:0; font-size:.88rem; max-width:60ch; }
+      .sheet{ background:#fff; color:#000; margin:0 auto 14px; position:relative; box-shadow:0 4px 24px rgba(0,0,0,.45); }
+      .sheet svg{ display:block; }
+
+      @media print{
+        body{ background:#fff; }
+        .screen-wrap{ display:none !important; }
+        #printView{ display:block !important; position:static; overflow:visible; background:none; padding:0; }
+        #printView .pv-bar{ display:none !important; }
+        .sheet{ box-shadow:none; margin:0; page-break-after:always; }
+        .sheet:last-child{ page-break-after:auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-wrap">
+      <div class="wrap">
+        <header class="topbar">
+          <div>
+            <h1>Pipe <span>Tools</span></h1>
+            <p>Flat patterns for pipe insulation cladding and wraparound saddle templates. Calculate, print 1:1, cut. No account, nothing paywalled.</p>
+          </div>
+          <div class="top-controls">
+            <div class="ctl">
+              <label id="unitLbl">Units</label>
+              <div class="seg" role="group" aria-labelledby="unitLbl">
+                <button type="button" id="unitMm" aria-pressed="true">mm</button>
+                <button type="button" id="unitIn" aria-pressed="false">inch</button>
+              </div>
+            </div>
+            <div class="ctl">
+              <label>No printer?</label>
+              <button type="button" id="screenCheckTop" style="border:1px solid var(--line2);background:var(--panel2);border-radius:8px;padding:6px 14px;font-weight:600;">On-screen 1:1 check</button>
+            </div>
+            <div class="ctl">
+              <label for="paperSel">Print paper</label>
+              <select id="paperSel">
+                <option value="a4" selected>A4 · 210 × 297</option>
+                <option value="letter">Letter · 216 × 279</option>
+                <option value="a3">A3 · 297 × 420</option>
+              </select>
+            </div>
+          </div>
+        </header>
+
+        <nav class="tabs" role="tablist" aria-label="Tools">
+          <button type="button" role="tab" data-tool="clad" aria-selected="true">Insulation cladding</button>
+          <button type="button" role="tab" data-tool="saddle" aria-selected="false">Saddle / wraparound</button>
+          <button type="button" role="tab" data-tool="offset" aria-selected="false">Pipe offset</button>
+          <button type="button" role="tab" data-tool="sizes" aria-selected="false">Pipe sizes (NPS / DN)</button>
+        </nav>
+
+        <!-- ============ CLADDING ============ -->
+        <section class="tool active" id="tool-clad">
+          <div class="layout">
+            <div class="card form">
+              <h2>Cladding pattern</h2>
+              <p class="sub">Diameters are measured <b>over the insulation</b> — pipe OD + 2 × insulation thickness.</p>
+              <div class="subtabs" role="tablist" aria-label="Fitting">
+                <button type="button" data-fit="elbow" aria-selected="true">Gored elbow</button>
+                <button type="button" data-fit="straight" aria-selected="false">Straight jacket</button>
+                <button type="button" data-fit="reducer" aria-selected="false">Reducer</button>
+                <button type="button" data-fit="cap" aria-selected="false">End cap</button>
+              </div>
+
+              <form class="fitform active" id="fit-elbow" autocomplete="off">
+                <div class="field">
+                  <label for="ce-preset">Pipe size preset (NPS / DN)</label>
+                  <select id="ce-preset"><option value="">Custom / type below</option></select>
+                </div>
+                <div class="grid2">
+                  <div class="field"><label for="ce-od">Pipe OD <span class="u-lab">(mm)</span></label><input class="dim" id="ce-od" type="number" step="any" value="168.3" /></div>
+                  <div class="field"><label for="ce-ins">Insulation <span class="u-lab">(mm)</span></label><input class="dim" id="ce-ins" type="number" step="any" value="50" /></div>
+                </div>
+                <div class="grid2">
+                  <div class="field"><label for="ce-rc">Bend centreline radius <span class="u-lab">(mm)</span></label><input class="dim" id="ce-rc" type="number" step="any" value="229" /><span class="hint">Long radius ≈ 1.5 × nominal bore</span></div>
+                  <div class="field"><label for="ce-bend">Bend angle (°)</label><input id="ce-bend" type="number" step="any" value="90" /></div>
+                </div>
+                <div class="grid2">
+                  <div class="field"><label for="ce-pieces">Pieces (gores)</label><input id="ce-pieces" type="number" step="1" min="2" max="12" value="5" /><span class="hint">Incl. 2 end gores</span></div>
+                  <div class="field"><label for="ce-tangent">Straight tangent <span class="u-lab">(mm)</span></label><input class="dim" id="ce-tangent" type="number" step="any" value="0" /></div>
+                </div>
+                <div class="grid2">
+                  <div class="field"><label for="ce-lap">Circumferential lap <span class="u-lab">(mm)</span></label><input class="dim" id="ce-lap" type="number" step="any" value="25" /></div>
+                  <div class="field"><label for="ce-piece">Pattern piece</label>
+                    <select id="ce-piece"><option value="end">End gore (×2)</option><option value="mid">Middle gore</option></select>
+                  </div>
+                </div>
+              </form>
+
+              <form class="fitform" id="fit-straight" autocomplete="off">
+                <div class="grid2">
+                  <div class="field"><label for="cs-dc">Ø over insulation <span class="u-lab">(mm)</span></label><input class="dim" id="cs-dc" type="number" step="any" value="268.3" /></div>
+                  <div class="field"><label for="cs-len">Jacket length <span class="u-lab">(mm)</span></label><input class="dim" id="cs-len" type="number" step="any" value="1000" /></div>
+                </div>
+                <div class="field"><label for="cs-lap">Circumferential lap <span class="u-lab">(mm)</span></label><input class="dim" id="cs-lap" type="number" step="any" value="50" /></div>
+                <p class="note">One rectangle wraps the straight. The dashed line is where the lap starts — the extra strip overlaps and gets riveted or screwed.</p>
+              </form>
+
+              <form class="fitform" id="fit-reducer" autocomplete="off">
+                <div class="grid2">
+                  <div class="field"><label for="cr-d1">Large Ø over insul. <span class="u-lab">(mm)</span></label><input class="dim" id="cr-d1" type="number" step="any" value="268.3" /></div>
+                  <div class="field"><label for="cr-d2">Small Ø over insul. <span class="u-lab">(mm)</span></label><input class="dim" id="cr-d2" type="number" step="any" value="168.3" /></div>
+                </div>
+                <div class="grid2">
+                  <div class="field"><label for="cr-h">Reducer length <span class="u-lab">(mm)</span></label><input class="dim" id="cr-h" type="number" step="any" value="150" /><span class="hint">Axial, large face to small face</span></div>
+                  <div class="field"><label for="cr-lap">Lap at seam <span class="u-lab">(mm)</span></label><input class="dim" id="cr-lap" type="number" step="any" value="25" /></div>
+                </div>
+                <p class="note">Concentric reducer developed as a true cone frustum sector. Eccentric reducers need a different development — not covered here.</p>
+              </form>
+
+              <form class="fitform" id="fit-cap" autocomplete="off">
+                <div class="grid2">
+                  <div class="field"><label for="cc-dc">Ø over insulation <span class="u-lab">(mm)</span></label><input class="dim" id="cc-dc" type="number" step="any" value="268.3" /></div>
+                  <div class="field"><label for="cc-skirt">Skirt depth <span class="u-lab">(mm)</span></label><input class="dim" id="cc-skirt" type="number" step="any" value="50" /></div>
+                </div>
+                <p class="note">Flat end cap: cut the outer circle, fold or swage the skirt down at the dashed circle line.</p>
+              </form>
+
+              <div class="divider"></div>
+              <div class="grid2">
+                <div class="field"><label for="cl-mat">Sheet material</label>
+                  <select id="cl-mat">
+                    <option value="2700">Aluminium</option>
+                    <option value="7900">Stainless steel</option>
+                    <option value="7850">Galvanised steel</option>
+                  </select>
+                </div>
+                <div class="field"><label for="cl-gauge">Sheet thickness <span class="u-lab">(mm)</span></label><input class="dim" id="cl-gauge" type="number" step="any" value="0.8" /></div>
+              </div>
+              <div class="msg" id="cladMsg" role="status"></div>
+            </div>
+
+            <div class="card out">
+              <h3 id="cladTitle">Pattern</h3>
+              <p class="cap" id="cladCap"></p>
+              <div class="p3d">
+                <div class="p3d-head"><b>3D preview</b><span>drag to spin · auto-rotates</span></div>
+                <div class="p3d-stage" id="clad3d" role="img" aria-label="Rotating 3D preview of the cladding fitting"></div>
+                <div class="p3d-cap" id="clad3dCap"></div>
+              </div>
+              <div class="preview" id="cladPreview"></div>
+              <div class="stats" id="cladStats"></div>
+              <div class="actions">
+                <button type="button" class="primary" data-act="print" data-toolkey="clad">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>
+                  Tiled 1:1 sheets
+                </button>
+                <button type="button" data-act="svg" data-toolkey="clad">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                  SVG (1:1)
+                </button>
+                <button type="button" data-act="dxf" data-toolkey="clad">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                  DXF
+                </button>
+                <button type="button" data-screen="clad">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+                  On-screen 1:1
+                </button>
+              </div>
+              <div id="cladOrdsWrap">
+                <div class="ord-title">Ordinates — mark these on the sheet if you are laying out by hand</div>
+                <div class="ords" id="cladOrds"></div>
+              </div>
+              <div class="howto">
+                <h3>How the elbow gore works</h3>
+                <ol>
+                  <li>Cut <b>2 end gores</b> and <b id="midCountHow">3 middle gores</b> for the piece count you set.</li>
+                  <li>The pattern is drawn with the <b>outside of the bend (heel) at the centre</b> of the sheet and the throat at both edges.</li>
+                  <li>Roll each gore to the cladding diameter, overlap the lap strip, and work from one tangent end toward the other, riveting as you go.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ SADDLE ============ -->
+        <section class="tool" id="tool-saddle">
+          <div class="layout">
+            <div class="card form">
+              <h2>Saddle / wraparound template</h2>
+              <p class="sub">The cut line for a branch pipe landing on a header pipe — tee or lateral. Wrap the printed template around the branch, mark, cut.</p>
+              <form id="fit-saddle" autocomplete="off">
+                <div class="field">
+                  <label for="sd-preset-h">Header preset (NPS / DN)</label>
+                  <select id="sd-preset-h"><option value="">Custom / type below</option></select>
+                </div>
+                <div class="field"><label for="sd-header">Header (run) OD <span class="u-lab">(mm)</span></label><input class="dim" id="sd-header" type="number" step="any" value="219.1" /></div>
+                <div class="field">
+                  <label for="sd-preset-b">Branch preset (NPS / DN)</label>
+                  <select id="sd-preset-b"><option value="">Custom / type below</option></select>
+                </div>
+                <div class="field"><label for="sd-branch">Branch OD <span class="u-lab">(mm)</span></label><input class="dim" id="sd-branch" type="number" step="any" value="114.3" /></div>
+                <div class="grid2">
+                  <div class="field"><label for="sd-angle">Branch angle (°)</label><input id="sd-angle" type="number" step="any" value="90" /><span class="hint">90 = tee · 45 = lateral</span></div>
+                  <div class="field"><label for="sd-div">Divisions</label>
+                    <select id="sd-div"><option value="12">12</option><option value="16" selected>16</option><option value="24">24</option></select>
+                  </div>
+                </div>
+                <div class="field"><label for="sd-margin">Reference margin <span class="u-lab">(mm)</span></label><input class="dim" id="sd-margin" type="number" step="any" value="25" /><span class="hint">Straight strip above the cut line — wrap edge stays square</span></div>
+              </form>
+              <div class="msg" id="saddleMsg" role="status"></div>
+              <div class="divider"></div>
+              <p class="note">Use the <b>outside diameters of the actual pipes</b> here — for a saddle the branch is cut to the header's outside surface. If the branch must pass through or sit inside a hole, allow your usual fit-up gap on top.</p>
+            </div>
+
+            <div class="card out">
+              <h3 id="saddleTitle">Branch wrap template</h3>
+              <p class="cap" id="saddleCap"></p>
+              <div class="p3d">
+                <div class="p3d-head"><b>3D preview</b><span>drag to spin · auto-rotates</span></div>
+                <div class="p3d-stage" id="saddle3d" role="img" aria-label="Rotating 3D preview of the branch on the header"></div>
+                <div class="p3d-cap" id="saddle3dCap"></div>
+              </div>
+              <div class="preview" id="saddlePreview"></div>
+              <div class="stats" id="saddleStats"></div>
+              <div class="actions">
+                <button type="button" class="primary" data-act="print" data-toolkey="saddle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>
+                  Tiled 1:1 sheets
+                </button>
+                <button type="button" data-act="svg" data-toolkey="saddle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                  SVG (1:1)
+                </button>
+                <button type="button" data-act="dxf" data-toolkey="saddle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                  DXF
+                </button>
+                <button type="button" data-screen="saddle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+                  On-screen 1:1
+                </button>
+              </div>
+              <div class="ord-title">Ordinates — distance around branch vs. cut depth from the reference edge</div>
+              <div class="ords" id="saddleOrds"></div>
+              <h3 style="margin-top:18px;font-size:1rem;">Hole in the header</h3>
+              <p class="cap">Where the branch lands — mark this outline on the header to cut the hole.</p>
+              <div class="preview" id="holePreview"></div>
+              <div class="stats" id="holeStats"></div>
+              <div class="howto">
+                <h3>Using the template</h3>
+                <ol>
+                  <li>Print 1:1, tape the tiles together, and <b>measure the 100&nbsp;mm scale bar</b> on a tile before trusting it.</li>
+                  <li>Wrap the template around the branch with the straight reference edge square to the pipe, seam the edges together, and mark the curve.</li>
+                  <li>The two low points of the curve sit on the header's centreline sides; the high points face along the header. Cut, then dress to fit.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ OFFSET ============ -->
+        <section class="tool" id="tool-offset">
+          <div class="layout">
+            <div class="card form">
+              <h2>Pipe offset calculator</h2>
+              <p class="sub">Simple and rolling offsets with standard elbow angles. Travel is centre-to-centre of the two elbows.</p>
+              <form id="fit-offset" autocomplete="off">
+                <div class="field"><label for="of-offset">Offset <span class="u-lab">(mm)</span></label><input class="dim" id="of-offset" type="number" step="any" value="300" /><span class="hint">Sideways shift between the two runs</span></div>
+                <div class="field"><label for="of-roll">Roll <span class="u-lab">(mm)</span></label><input class="dim" id="of-roll" type="number" step="any" value="0" /><span class="hint">Up/down shift — 0 for a flat offset</span></div>
+                <div class="field"><label for="of-angle">Elbow angle</label>
+                  <select id="of-angle">
+                    <option value="45" selected>45° elbows</option>
+                    <option value="22.5">22.5° elbows</option>
+                    <option value="30">30° elbows</option>
+                    <option value="60">60° elbows</option>
+                    <option value="custom">Custom…</option>
+                  </select>
+                </div>
+                <div class="field" id="of-customWrap" style="display:none"><label for="of-angnum">Custom angle (°)</label><input id="of-angnum" type="number" step="any" value="40" /></div>
+              </form>
+              <p class="note">To get the cut length of the travel piece, subtract the two elbows' centre-to-end take-outs from the travel, and add your weld gaps.</p>
+            </div>
+            <div class="card out">
+              <h3>Result</h3>
+              <p class="cap">All lengths centre-to-centre unless noted.</p>
+              <div class="p3d">
+                <div class="p3d-head"><b>3D preview</b><span>drag to spin · auto-rotates</span></div>
+                <div class="p3d-stage" id="offset3d" role="img" aria-label="Rotating 3D preview of the pipe offset"></div>
+                <div class="p3d-cap" id="offset3dCap"></div>
+              </div>
+              <div class="preview" id="offsetPreview"></div>
+              <div class="stats" id="offsetStats"></div>
+              <div class="msg" id="offsetMsg" role="status"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ SIZES ============ -->
+        <section class="tool" id="tool-sizes">
+          <div class="card out">
+            <div class="std-head">
+              <div>
+                <h3 id="sizesTitle">Steel pipe sizes — ASME B36.10 (American)</h3>
+                <p class="cap" id="sizesCap" style="margin:0;">Outside diameter is the same for every schedule at a given NPS. Wall and bore shown for Schedule 40 (STD weight up to 10″).</p>
+              </div>
+              <div class="ctl">
+                <label id="stdLbl">Standard</label>
+                <div class="seg" role="group" aria-labelledby="stdLbl">
+                  <button type="button" id="stdAsme" aria-pressed="true">ASME · NPS</button>
+                  <button type="button" id="stdEn" aria-pressed="false">European · EN / DN</button>
+                </div>
+              </div>
+            </div>
+            <div id="tableAsme">
+              <table class="sizes">
+                <thead><tr><th>NPS</th><th>OD (in)</th><th>OD (mm)</th><th>Sch 40 wall (mm)</th><th>Bore / ID (mm)</th><th></th></tr></thead>
+                <tbody id="sizesBody"></tbody>
+              </table>
+            </div>
+            <div id="tableEn" style="display:none">
+              <table class="sizes">
+                <thead><tr><th>DN</th><th>NPS equiv.</th><th>OD EN 10220 (mm)</th><th>OD ASME (mm)</th><th></th></tr></thead>
+                <tbody id="enBody"></tbody>
+              </table>
+              <p class="note" style="margin-top:10px;">EN 10220 Series 1 outside diameters (aligned with ISO 4200). DN is a label, not a measurement — DN50 pipe is 60.3&nbsp;mm across, not 50. Highlighted rows are where the European OD <b>differs</b> from the ASME OD for the same nominal size — most importantly DN65: <b>76.1&nbsp;mm (EN) vs 73.0&nbsp;mm (ASME)</b>. Pipe, fittings and cladding must all follow one standard at those sizes. EN 10220 lists diameters only; wall thickness comes from the product standard (e.g. EN 10216 / EN 10217), so no single European “Schedule 40” wall is shown.</p>
+            </div>
+            <div class="msg" id="sizeMsg" role="status"></div>
+            <p class="note" style="margin-top:12px;"><b>Use</b> loads that OD into the cladding tool's Pipe OD — or pick NPS / DN sizes directly from the preset lists in the cladding and saddle tools. For cladding, add 2 × insulation thickness to the OD. For saddles, use the OD of both pipes exactly as they are.</p>
+          </div>
+        </section>
+
+        <p class="foot">Patterns are developed from the exact cylinder / cone geometry — the same maths the paid apps use — and drawn at true size. Always run the scale check on the first printed tile: if the bar does not measure exactly 100&nbsp;mm, reprint at “Actual size / 100%” with fit-to-page off. No printer? Use the <b>On-screen 1:1 check</b> — hold a ruler to the screen, slide the zoom until the bar measures exactly 100&nbsp;mm, and the pattern on screen is true size. Check a first cut against the pipe before committing a full sheet.</p>
+      </div>
+    </div>
+
+    <!-- Print view -->
+    <div id="printView" aria-hidden="true">
+      <div class="pv-bar">
+        <p><b>1:1 tiled sheets.</b> Use your browser's or device's print command on this view, at <b>Actual size / 100%</b>, fit-to-page <b>off</b>. Measure the 100&nbsp;mm bar on the first tile — if it is not exactly 100&nbsp;mm, fix the printer setting before cutting. Tape tiles together on the dashed overlap lines.</p>
+        <div class="actions" style="margin:0;">
+          <button type="button" id="pvClose">Close</button>
+        </div>
+      </div>
+      <div id="sheets"></div>
+    </div>
+
+    <!-- On-screen 1:1 check -->
+    <div id="screenView" aria-hidden="true">
+      <div class="sv-inner">
+        <div class="sv-bar">
+          <div>
+            <h2>On-screen 1:1 check — no printer needed</h2>
+            <p>Calibrate once with a ruler, then the pattern below is shown at true size on this screen. Scroll or drag inside the pattern box to inspect the parts that run off the edge.</p>
+          </div>
+          <div class="actions" style="margin:0;">
+            <button type="button" id="svClose">Close</button>
+          </div>
+        </div>
+
+        <div class="sv-card">
+          <h3>1 · Match the bar to your ruler</h3>
+          <p class="cap">Hold a ruler flat against the screen over the bar and slide the zoom until the bar measures <b>exactly 100&nbsp;mm</b> from end tick to end tick. If the bar runs off the side of the screen, turn the phone sideways (landscape). Don't pinch-zoom or browser-zoom afterwards — that undoes the calibration.</p>
+          <div class="cal-scroll">
+            <div class="cal-bar" id="calBar"><span>100 mm</span></div>
+            <div class="cal-ends" id="calEnds"><span>0</span><span>100 mm</span></div>
+          </div>
+          <div class="cal-ctl">
+            <button type="button" class="step-btn" id="calMinus" aria-label="Zoom out a step">−</button>
+            <input type="range" id="calRange" min="2" max="6" step="0.01" value="3.78" aria-label="Screen zoom — slide until the bar measures exactly 100 mm" />
+            <button type="button" class="step-btn" id="calPlus" aria-label="Zoom in a step">+</button>
+            <div class="cal-read" id="calRead"></div>
+          </div>
+          <div class="sv-ok" id="calOk">Bar is at true size — the pattern below is now 1:1 on this screen. Hold the pipe or a tape against it to check, or lay the sheet over the screen in a dim room and trace the line.</div>
+        </div>
+
+        <div class="sv-card">
+          <h3>2 · Pattern at true size</h3>
+          <p class="cap" id="svCap"></p>
+          <div class="sv-pats" role="tablist" aria-label="Pattern to show">
+            <button type="button" id="svPatClad" aria-selected="true">Cladding pattern</button>
+            <button type="button" id="svPatSaddle" aria-selected="false">Saddle template</button>
+          </div>
+          <div class="sv-stage" id="svStage"></div>
+          <p class="note" style="margin-top:10px;">Screen glass, screen protectors and parallax can shift a traced line by a fraction of a millimetre — check one known dimension against the pipe before cutting a full sheet.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Three.js r128 (UMD build) for the rotating 3D previews. If it fails to
+         load (offline), the preview boxes show a note + retry — the 2D patterns
+         and everything else keep working. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+    "use strict";
+    /* ---------- helpers & state ---------- */
+    var $ = function(id){ return document.getElementById(id); };
+    var unit = "mm";               // display unit
+    var U = function(){ return unit === "in" ? 25.4 : 1; };  // multiply display -> mm
+    var paper = { w:210, h:297, name:"A4" };
+    var PAPERS = { a4:{w:210,h:297,name:"A4"}, letter:{w:215.9,h:279.4,name:"Letter"}, a3:{w:297,h:420,name:"A3"} };
+
+    function num(id){ var v = parseFloat($(id).value); return isFinite(v) ? v : 0; }
+    function dim(id){ return num(id) * U(); }                 // input -> mm
+    function fmt(mm, dec){                                    // mm -> display string
+      var v = unit === "in" ? mm/25.4 : mm;
+      var d = dec != null ? dec : (unit === "in" ? 3 : 1);
+      return v.toFixed(d);
+    }
+    function unitName(){ return unit === "in" ? "in" : "mm"; }
+    function statHTML(list){
+      return list.map(function(s){
+        return '<div class="stat"><div class="k">'+s[0]+'</div><div class="v">'+s[1]+(s[2]?' <small>'+s[2]+'</small>':'')+'</div></div>';
+      }).join("");
+    }
+    function setMsg(id, text, kind){
+      var el = $(id); el.className = "msg" + (kind ? " "+kind : ""); el.textContent = text || "";
+      el.style.display = text ? "block" : "none";
+    }
+
+    /* ---------- NPS reference data (ASME B36.10) ---------- */
+    var NPS = [
+      ["1/2", 0.840, 21.3, 2.77, 15.8], ["3/4", 1.050, 26.7, 2.87, 20.9],
+      ["1", 1.315, 33.4, 3.38, 26.6], ["1-1/4", 1.660, 42.2, 3.56, 35.1],
+      ["1-1/2", 1.900, 48.3, 3.68, 40.9], ["2", 2.375, 60.3, 3.91, 52.5],
+      ["2-1/2", 2.875, 73.0, 5.16, 62.7], ["3", 3.500, 88.9, 5.49, 77.9],
+      ["3-1/2", 4.000, 101.6, 5.74, 90.1], ["4", 4.500, 114.3, 6.02, 102.3],
+      ["5", 5.563, 141.3, 6.55, 128.2], ["6", 6.625, 168.3, 7.11, 154.1],
+      ["8", 8.625, 219.1, 8.18, 202.7], ["10", 10.750, 273.0, 9.27, 254.5],
+      ["12", 12.750, 323.9, 10.31, 303.2]
+    ];
+    /* ---------- European reference data (EN 10220 Series 1 / ISO 4200) ---------- */
+    // [DN, NPS equiv, OD EN (mm), OD ASME (mm)]
+    var EN = [
+      ["DN 15","1/2",21.3,21.3], ["DN 20","3/4",26.9,26.7], ["DN 25","1",33.7,33.4],
+      ["DN 32","1-1/4",42.4,42.2], ["DN 40","1-1/2",48.3,48.3], ["DN 50","2",60.3,60.3],
+      ["DN 65","2-1/2",76.1,73.0], ["DN 80","3",88.9,88.9], ["DN 100","4",114.3,114.3],
+      ["DN 125","5",139.7,141.3], ["DN 150","6",168.3,168.3], ["DN 200","8",219.1,219.1],
+      ["DN 250","10",273.0,273.0], ["DN 300","12",323.9,323.9], ["DN 350","14",355.6,355.6],
+      ["DN 400","16",406.4,406.4], ["DN 450","18",457.0,457.0], ["DN 500","20",508.0,508.0],
+      ["DN 600","24",610.0,610.0]
+    ];
+    function fillPreset(selId, targetId){
+      var sel = $(selId);
+      var g1 = document.createElement("optgroup"); g1.label = "NPS — ASME B36.10";
+      NPS.forEach(function(r){
+        var o = document.createElement("option"); o.value = r[2]; o.textContent = "NPS " + r[0] + '" · OD ' + r[2] + ' mm'; g1.appendChild(o);
+      });
+      sel.appendChild(g1);
+      var g2 = document.createElement("optgroup"); g2.label = "DN — EN 10220 (European)";
+      EN.forEach(function(r){
+        var o = document.createElement("option"); o.value = r[2]; o.textContent = r[0] + ' · OD ' + r[2].toFixed(1) + ' mm (EN)'; g2.appendChild(o);
+      });
+      sel.appendChild(g2);
+      sel.addEventListener("change", function(){
+        if(!sel.value) return;
+        var mm = parseFloat(sel.value);
+        $(targetId).value = unit === "in" ? (mm/25.4).toFixed(3) : mm;
+        $(targetId).dispatchEvent(new Event("input"));
+      });
+    }
+    fillPreset("ce-preset","ce-od"); fillPreset("sd-preset-h","sd-header"); fillPreset("sd-preset-b","sd-branch");
+    function useOD(mm, label){
+      $("ce-preset").value = "";
+      $("ce-od").value = unit === "in" ? (mm/25.4).toFixed(3) : mm;
+      $("ce-od").dispatchEvent(new Event("input"));
+      document.querySelector('.tabs [data-tool="clad"]').click();
+      setMsg("cladMsg", label + " loaded as the cladding Pipe OD. Add the insulation thickness next to it, and the pattern above is updated.", "info");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    $("sizesBody").innerHTML = NPS.map(function(r){
+      return "<tr><td>"+r[0]+"&Prime;</td><td>"+r[1].toFixed(3)+"</td><td>"+r[2].toFixed(1)+"</td><td>"+r[3].toFixed(2)+"</td><td>"+r[4].toFixed(1)+'</td><td><button type="button" class="use-btn" data-od="'+r[2]+'" data-label="NPS '+r[0]+'&Prime; · OD '+r[2].toFixed(1)+' mm">Use</button></td></tr>';
+    }).join("");
+    $("enBody").innerHTML = EN.map(function(r){
+      var diff = Math.abs(r[2]-r[3]) > 0.05;
+      return '<tr'+(diff?' class="diff"':'')+'><td>'+r[0]+"</td><td>"+r[1]+"&Prime;</td><td>"+r[2].toFixed(1)+"</td><td>"+r[3].toFixed(1)+(diff?" · differs":"")+'</td><td><button type="button" class="use-btn" data-od="'+r[2]+'" data-label="'+r[0]+' · OD '+r[2].toFixed(1)+' mm (EN 10220)">Use</button></td></tr>';
+    }).join("");
+    document.querySelectorAll(".use-btn").forEach(function(b){
+      b.addEventListener("click", function(){ useOD(parseFloat(b.getAttribute("data-od")), b.getAttribute("data-label")); });
+    });
+    function setStd(en){
+      $("tableAsme").style.display = en ? "none" : "";
+      $("tableEn").style.display = en ? "" : "none";
+      $("stdAsme").setAttribute("aria-pressed", en ? "false" : "true");
+      $("stdEn").setAttribute("aria-pressed", en ? "true" : "false");
+      $("sizesTitle").textContent = en ? "Steel pipe sizes — EN 10220 (European)" : "Steel pipe sizes — ASME B36.10 (American)";
+      $("sizesCap").textContent = en
+        ? "European DN sizes, Series 1 outside diameters. The ASME OD for the same nominal size is shown alongside — watch the highlighted rows, they are not interchangeable."
+        : "Outside diameter is the same for every schedule at a given NPS. Wall and bore shown for Schedule 40 (STD weight up to 10″).";
+      setMsg("sizeMsg", "");
+    }
+    $("stdAsme").addEventListener("click", function(){ setStd(false); });
+    $("stdEn").addEventListener("click", function(){ setStd(true); });
+
+    /* ---------- pattern registry (for print / SVG / DXF) ---------- */
+    var PATTERNS = { clad:null, saddle:null };
+    // pattern: { title, sub, width, height, paths:[{pts:[[x,y]..], closed, type:'cut'|'mark'}] }
+
+    function pathsToSVG(pat, opts){
+      opts = opts || {};
+      var s = "";
+      pat.paths.forEach(function(p){
+        var pts = p.pts.map(function(q){ return q[0].toFixed(2)+","+q[1].toFixed(2); }).join(" ");
+        if(p.type === "mark"){
+          s += '<polyline points="'+pts+'" fill="none" stroke="'+(opts.markColor||"#2f5d7c")+'" stroke-width="'+(opts.markW||0.7)+'" stroke-dasharray="4 3"/>';
+        } else {
+          s += '<polygon points="'+pts+'" fill="'+(opts.fill||"rgba(217,72,15,.07)")+'" stroke="'+(opts.cutColor||"#d9480f")+'" stroke-width="'+(opts.cutW||1)+'" stroke-linejoin="round"/>';
+        }
+      });
+      return s;
+    }
+    function previewSVG(pat, el){
+      if(!pat){ el.innerHTML = ""; return; }
+      var pad = Math.max(pat.width, pat.height) * 0.04 + 4;
+      el.innerHTML = '<svg viewBox="'+(-pad)+' '+(-pad)+' '+(pat.width+2*pad)+' '+(pat.height+2*pad)+'" role="img" aria-label="'+pat.title+'">'
+        + pathsToSVG(pat, { cutW: Math.max(pat.width,pat.height)/220, markW: Math.max(pat.width,pat.height)/300 })
+        + "</svg>";
+    }
+
+    /* ---------- downloads: SVG & DXF ---------- */
+    function download(name, text, mime){
+      var blob = new Blob([text], {type: mime});
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 400);
+    }
+    function svgFile(pat){
+      var extra = 16;
+      var s = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      s += '<svg xmlns="http://www.w3.org/2000/svg" width="'+pat.width.toFixed(1)+'mm" height="'+(pat.height+extra).toFixed(1)+'mm" viewBox="0 0 '+pat.width.toFixed(2)+' '+(pat.height+extra).toFixed(2)+'">\n';
+      s += "<title>"+pat.title+" — 1:1 pattern, units mm</title>\n";
+      s += pathsToSVG(pat, { fill:"none", cutW:0.5, markW:0.35, cutColor:"#000000", markColor:"#666666" });
+      var y = pat.height + 10;
+      s += '<line x1="0" y1="'+y+'" x2="100" y2="'+y+'" stroke="#000" stroke-width="0.6"/>';
+      s += '<line x1="0" y1="'+(y-2)+'" x2="0" y2="'+(y+2)+'" stroke="#000" stroke-width="0.6"/>';
+      s += '<line x1="100" y1="'+(y-2)+'" x2="100" y2="'+(y+2)+'" stroke="#000" stroke-width="0.6"/>';
+      s += '<text x="104" y="'+(y+1.5)+'" font-family="sans-serif" font-size="4">100 mm — scale check</text>\n</svg>';
+      return s;
+    }
+    function dxfFile(pat){
+      var out = ["0","SECTION","2","HEADER","9","$ACADVER","1","AC1021","9","$INSUNITS","70","4","0","ENDSEC","0","SECTION","2","ENTITIES"];
+      pat.paths.forEach(function(p){
+        out.push("0","LWPOLYLINE","100","AcDbEntity","8", p.type==="mark" ? "MARK" : "CUT","100","AcDbPolyline","90", String(p.pts.length),"70", p.closed ? "1":"0");
+        p.pts.forEach(function(q){
+          out.push("10", q[0].toFixed(3), "20", (pat.height - q[1]).toFixed(3));   // DXF Y is up
+        });
+      });
+      out.push("0","ENDSEC","0","EOF");
+      return out.join("\n");
+    }
+    function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""); }
+
+    /* ---------- tiled 1:1 print ---------- */
+    var MARGIN = 10, OVERLAP = 12;
+    function buildSheets(pat){
+      var pw = paper.w - 2*MARGIN, ph = paper.h - 2*MARGIN;
+      var stepX = pw - OVERLAP, stepY = ph - OVERLAP;
+      var cols = Math.max(1, Math.ceil((pat.width - OVERLAP) / stepX));
+      var rows = Math.max(1, Math.ceil((pat.height - OVERLAP) / stepY));
+      var html = "";
+      for(var rI=0; rI<rows; rI++){
+        for(var cI=0; cI<cols; cI++){
+          var tx = cI*stepX, ty = rI*stepY;
+          var clipId = "clip"+rI+"_"+cI;
+          html += '<div class="sheet" style="width:'+paper.w+'mm;height:'+paper.h+'mm">';
+          html += '<svg width="'+paper.w+'mm" height="'+paper.h+'mm" viewBox="0 0 '+paper.w+' '+paper.h+'">';
+          html += '<defs><clipPath id="'+clipId+'"><rect x="'+MARGIN+'" y="'+MARGIN+'" width="'+pw+'" height="'+ph+'"/></clipPath></defs>';
+          html += '<rect x="'+MARGIN+'" y="'+MARGIN+'" width="'+pw+'" height="'+ph+'" fill="none" stroke="#999" stroke-width="0.25"/>';
+          html += '<g clip-path="url(#'+clipId+')"><g transform="translate('+(MARGIN-tx).toFixed(2)+' '+(MARGIN-ty).toFixed(2)+')">'
+               + pathsToSVG(pat, { fill:"none", cutW:0.45, markW:0.3, cutColor:"#000", markColor:"#555" }) + "</g></g>";
+          if(cI < cols-1) html += '<line x1="'+(MARGIN+pw-OVERLAP)+'" y1="'+MARGIN+'" x2="'+(MARGIN+pw-OVERLAP)+'" y2="'+(MARGIN+ph)+'" stroke="#000" stroke-width="0.3" stroke-dasharray="3 2"/>';
+          if(rI < rows-1) html += '<line x1="'+MARGIN+'" y1="'+(MARGIN+ph-OVERLAP)+'" x2="'+(MARGIN+pw)+'" y2="'+(MARGIN+ph-OVERLAP)+'" stroke="#000" stroke-width="0.3" stroke-dasharray="3 2"/>';
+          // scale bar + tile label in bottom margin
+          var by = paper.h - 5.5;
+          html += '<line x1="'+MARGIN+'" y1="'+by+'" x2="'+(MARGIN+100)+'" y2="'+by+'" stroke="#000" stroke-width="0.5"/>';
+          html += '<line x1="'+MARGIN+'" y1="'+(by-1.6)+'" x2="'+MARGIN+'" y2="'+(by+1.6)+'" stroke="#000" stroke-width="0.5"/>';
+          html += '<line x1="'+(MARGIN+100)+'" y1="'+(by-1.6)+'" x2="'+(MARGIN+100)+'" y2="'+(by+1.6)+'" stroke="#000" stroke-width="0.5"/>';
+          html += '<text x="'+(MARGIN+104)+'" y="'+(by+1.2)+'" font-family="sans-serif" font-size="3.2">100 mm — must measure exactly</text>';
+          html += '<text x="'+MARGIN+'" y="'+(MARGIN-3.5)+'" font-family="sans-serif" font-size="3.4">'+pat.title+' · tile '+(cI+1)+","+(rI+1)+' of '+cols+"×"+rows+'</text>';
+          html += "</svg></div>";
+        }
+      }
+      return html;
+    }
+    function openPrint(pat){
+      if(!pat) return;
+      $("pageStyle").textContent = "@page { size: "+paper.name+"; margin: 0; }";
+      $("sheets").innerHTML = buildSheets(pat);
+      $("printView").classList.add("open");
+      $("printView").setAttribute("aria-hidden","false");
+      $("printView").scrollTop = 0;
+    }
+    $("pvClose").addEventListener("click", function(){
+      $("printView").classList.remove("open"); $("printView").setAttribute("aria-hidden","true");
+    });
+
+    /* ---------- on-screen 1:1 check ---------- */
+    var pxPerMm = 96/25.4;                 // nominal CSS px per mm — user calibrates from here
+    var screenKey = "clad";
+    var calibrated = false;
+    function renderScreen(){
+      var barPx = 100 * pxPerMm;
+      $("calBar").style.width = barPx.toFixed(1) + "px";
+      $("calEnds").style.width = barPx.toFixed(1) + "px";
+      $("calRead").innerHTML = "Zoom <b>" + pxPerMm.toFixed(2) + " px/mm</b> · bar on screen <b>" + Math.round(barPx) + " px</b> wide · when your ruler reads exactly 100 mm across it, everything below is true size.";
+      $("calOk").classList.toggle("show", calibrated);
+      $("svPatClad").setAttribute("aria-selected", screenKey === "clad" ? "true" : "false");
+      $("svPatSaddle").setAttribute("aria-selected", screenKey === "saddle" ? "true" : "false");
+      var pat = PATTERNS[screenKey];
+      if(!pat){
+        $("svCap").textContent = "No pattern yet — go back, set the inputs, and the pattern will appear here.";
+        $("svStage").innerHTML = "";
+        return;
+      }
+      $("svCap").textContent = pat.title + " — physical size " + pat.width.toFixed(1) + " × " + pat.height.toFixed(1) + " mm, drawn 1:1 at the calibrated zoom. Scroll inside the box to reach parts beyond the screen edge.";
+      var wPx = pat.width * pxPerMm, hPx = pat.height * pxPerMm;
+      $("svStage").innerHTML = '<svg width="' + wPx.toFixed(1) + '" height="' + hPx.toFixed(1) + '" viewBox="0 0 ' + pat.width.toFixed(2) + ' ' + pat.height.toFixed(2) + '" role="img" aria-label="' + pat.title + ' at true size">'
+        + pathsToSVG(pat, { cutW: Math.max(pat.width, pat.height) / 220, markW: Math.max(pat.width, pat.height) / 300 })
+        + "</svg>";
+    }
+    function setPx(v, fromUser){
+      pxPerMm = Math.min(6, Math.max(2, v));
+      $("calRange").value = pxPerMm;
+      if(fromUser) calibrated = true;
+      renderScreen();
+    }
+    function openScreen(key){
+      if(key) screenKey = key;
+      renderScreen();
+      $("screenView").classList.add("open");
+      $("screenView").setAttribute("aria-hidden", "false");
+      $("screenView").scrollTop = 0;
+    }
+    function closeScreen(){
+      $("screenView").classList.remove("open");
+      $("screenView").setAttribute("aria-hidden", "true");
+    }
+    $("calRange").addEventListener("input", function(){ setPx(parseFloat(this.value), true); });
+    $("calMinus").addEventListener("click", function(){ setPx(pxPerMm - 0.02, true); });
+    $("calPlus").addEventListener("click", function(){ setPx(pxPerMm + 0.02, true); });
+    $("svClose").addEventListener("click", closeScreen);
+    $("screenCheckTop").addEventListener("click", function(){ openScreen(null); });
+    $("svPatClad").addEventListener("click", function(){ screenKey = "clad"; renderScreen(); });
+    $("svPatSaddle").addEventListener("click", function(){ screenKey = "saddle"; renderScreen(); });
+    document.querySelectorAll("[data-screen]").forEach(function(btn){
+      btn.addEventListener("click", function(){ openScreen(btn.getAttribute("data-screen")); });
+    });
+    document.querySelectorAll("[data-act]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var pat = PATTERNS[btn.getAttribute("data-toolkey")];
+        if(!pat) return;
+        var act = btn.getAttribute("data-act");
+        if(act === "print") openPrint(pat);
+        else if(act === "svg") download(slug(pat.title)+".svg", svgFile(pat), "image/svg+xml");
+        else if(act === "dxf") download(slug(pat.title)+".dxf", dxfFile(pat), "application/dxf");
+      });
+    });
+
+    /* ---------- tabs & unit / paper controls ---------- */
+    document.querySelectorAll(".tabs [data-tool]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        document.querySelectorAll(".tabs [data-tool]").forEach(function(b){ b.setAttribute("aria-selected","false"); });
+        btn.setAttribute("aria-selected","true");
+        document.querySelectorAll(".tool").forEach(function(t){ t.classList.remove("active"); });
+        $("tool-"+btn.getAttribute("data-tool")).classList.add("active");
+      });
+    });
+    document.querySelectorAll(".subtabs [data-fit]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        document.querySelectorAll(".subtabs [data-fit]").forEach(function(b){ b.setAttribute("aria-selected","false"); });
+        btn.setAttribute("aria-selected","true");
+        document.querySelectorAll(".fitform").forEach(function(f){ f.classList.remove("active"); });
+        $("fit-"+btn.getAttribute("data-fit")).classList.add("active");
+        currentFit = btn.getAttribute("data-fit");
+        renderClad();
+      });
+    });
+    $("paperSel").addEventListener("change", function(){ paper = PAPERS[this.value]; });
+
+    function setUnit(u){
+      if(u === unit) return;
+      document.querySelectorAll("input.dim").forEach(function(inp){
+        var v = parseFloat(inp.value);
+        if(isFinite(v)) inp.value = (u === "in" ? v/25.4 : v*25.4).toFixed(u === "in" ? 3 : 1);
+      });
+      unit = u;
+      $("unitMm").setAttribute("aria-pressed", u==="mm" ? "true":"false");
+      $("unitIn").setAttribute("aria-pressed", u==="in" ? "true":"false");
+      document.querySelectorAll(".u-lab").forEach(function(s){ s.textContent = "("+unitName()+")"; });
+      renderAll();
+    }
+    $("unitMm").addEventListener("click", function(){ setUnit("mm"); });
+    $("unitIn").addEventListener("click", function(){ setUnit("in"); });
+    </script>
+
+    <script>
+    "use strict";
+    var currentFit = "elbow";
+    var DENS = function(){ return parseFloat($("cl-mat").value); };
+    function sheetWeight(areaMM2){
+      var t = dim("cl-gauge");
+      return areaMM2 * t * DENS() / 1e9;   // kg
+    }
+    function sampleCurve(fn, n){
+      var pts = [];
+      for(var i=0;i<=n;i++) pts.push(fn(i/n));
+      return pts;
+    }
+
+    /* ================= CLADDING ================= */
+    function cladElbow(){
+      var od = dim("ce-od"), ins = dim("ce-ins"), Rc = dim("ce-rc");
+      var B = num("ce-bend"), P = Math.round(num("ce-pieces"));
+      var T = dim("ce-tangent"), lap = Math.max(0, dim("ce-lap"));
+      var Dc = od + 2*ins, R = Dc/2, C = Math.PI*Dc;
+      if(!(od>0) || !(Dc>0) || !(Rc>0) || !(B>0) || P<2) { setMsg("cladMsg","Check the elbow inputs — diameters, radius, angle and piece count must be positive.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); return; }
+      if(Rc <= R){ setMsg("cladMsg","Centreline radius must be larger than the cladding radius ("+fmt(R)+" "+unitName()+") — the throat would close up. Increase the bend radius.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); return; }
+      setMsg("cladMsg", Rc - R < 10 ? "Very tight throat: "+fmt(Rc-R)+" "+unitName()+" between bend centre and throat. Real elbows this tight are usually pressed, not gored." : "", Rc - R < 10 ? "warn" : "");
+      var Dj = B/(P-1), m = Dj/2 * Math.PI/180, tanm = Math.tan(m);
+      var piece = $("ce-piece").value;
+      var lapAng = lap / R;                       // extra angle (rad) for the lap strip
+      var u0 = -Math.PI, u1 = Math.PI + lapAng;
+      var endH = function(u){ return (Rc + R*Math.cos(u)) * tanm + T; };
+      var midTop = function(u){ return (Rc + R) * tanm + (Rc + R*Math.cos(u)) * tanm; };  // shifted so bottom >= 0
+      var midBot = function(u){ return (Rc + R) * tanm - (Rc + R*Math.cos(u)) * tanm; };
+      var pts, H, areaAvg;
+      var topPts, botPts;
+      if(piece === "end"){
+        topPts = sampleCurve(function(t){ var u = u0 + (u1-u0)*t; return [ (u+Math.PI)*R, endH(u) ]; }, 96);
+        H = endH(0);
+        pts = topPts.concat([[ (u1+Math.PI)*R, 0 ],[ 0, 0 ]]);
+        areaAvg = C * (Rc*tanm + T);
+      } else {
+        topPts = sampleCurve(function(t){ var u = u0 + (u1-u0)*t; return [ (u+Math.PI)*R, midTop(u) ]; }, 96);
+        botPts = sampleCurve(function(t){ var u = u1 - (u1-u0)*t; return [ (u+Math.PI)*R, midBot(u) ]; }, 96);
+        H = midTop(0);
+        pts = topPts.concat(botPts);
+        areaAvg = C * 2 * Rc * tanm;
+      }
+      var paths = [{ pts: pts, closed:true, type:"cut" }];
+      if(lap > 0){
+        var lapTop = piece === "end" ? endH(Math.PI) : midTop(Math.PI);
+        var lapBot = piece === "end" ? 0 : midBot(Math.PI);
+        paths.push({ pts: [[C,lapBot],[C,lapTop]], closed:false, type:"mark" });   // lap start line (guide)
+      }
+      var title = "Cladding elbow "+B+"° — "+(piece==="end"?"end gore":"middle gore");
+      PATTERNS.clad = { title:title, width:(u1+Math.PI)*R, height:H, paths:paths };
+      previewSVG(PATTERNS.clad, $("cladPreview"));
+      $("cladTitle").textContent = title;
+      $("cladCap").textContent = "Blank "+fmt(PATTERNS.clad.width)+" × "+fmt(PATTERNS.clad.height)+" "+unitName()+" incl. "+fmt(lap)+" lap · heel (outside of bend) at the centre of the pattern, throat at the edges.";
+      var count = piece==="end" ? "Cut 2 of these" : "Cut "+(P-2)+" of these";
+      $("cladStats").innerHTML = statHTML([
+        ["Ø over insulation", fmt(Dc), unitName()],
+        ["Circumference", fmt(C), unitName()],
+        ["Mitre angle per cut", (Dj/2).toFixed(2), "°"],
+        ["Joint angle", Dj.toFixed(2), "°"],
+        ["Throat radius", fmt(Rc-R), unitName()],
+        ["Heel radius", fmt(Rc+R), unitName()],
+        ["Pieces in elbow", P, piece==="end" ? "· showing end gore" : "· showing middle"],
+        [count, "—", ""],
+        ["Sheet area / gore", (areaAvg/1e6).toFixed(3), "m²"],
+        ["Weight / gore", sheetWeight(areaAvg).toFixed(2), "kg"]
+      ]);
+      $("midCountHow").textContent = (P-2)+" middle gore"+(P-2===1?"":"s");
+      // ordinates: 16 divisions around
+      var ords = "";
+      for(var i=0;i<=16;i++){
+        var u = -Math.PI + i*(Math.PI/8);
+        var x = (i/16)*C;
+        var label = piece==="end" ? "height" : "top edge";
+        ords += '<div class="ord"><div class="n">DIV '+(i+1)+' · around '+fmt(x)+'</div><div class="a">'+fmt(piece==="end"?endH(u):midTop(u))+'</div>'
+          + (piece==="mid" ? '<div class="b">bottom '+fmt(midBot(u))+'</div>' : '<div class="b">end '+fmt(endH(u))+' · mid '+fmt(2*(Rc+R*Math.cos(u))*tanm)+'</div>')
+          + "</div>";
+      }
+      $("cladOrds").innerHTML = ords;
+      $("cladOrdsWrap").querySelector(".ord-title").textContent = piece==="end"
+        ? "Ordinates — height of the end gore at each of 16 divisions (second line: middle-gore height at the same division)"
+        : "Ordinates — top and bottom edge heights of the middle gore at each of 16 divisions";
+    }
+
+    function cladStraight(){
+      var Dc = dim("cs-dc"), L = dim("cs-len"), lap = Math.max(0, dim("cs-lap"));
+      if(!(Dc>0) || !(L>0)){ setMsg("cladMsg","Diameter and length must be positive.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); return; }
+      setMsg("cladMsg","");
+      var C = Math.PI*Dc, W = C + lap;
+      var paths = [{ pts:[[0,0],[W,0],[W,L],[0,L]], closed:true, type:"cut" }];
+      if(lap>0) paths.push({ pts:[[C,0],[C,L]], closed:false, type:"mark" });
+      PATTERNS.clad = { title:"Straight cladding jacket Ø"+fmt(Dc), width:W, height:L, paths:paths };
+      previewSVG(PATTERNS.clad, $("cladPreview"));
+      $("cladTitle").textContent = "Straight jacket — Ø "+fmt(Dc)+" "+unitName();
+      $("cladCap").textContent = "Blank "+fmt(W)+" × "+fmt(L)+" "+unitName()+" incl. "+fmt(lap)+" lap (dashed line).";
+      var area = C*L;
+      $("cladStats").innerHTML = statHTML([
+        ["Ø over insulation", fmt(Dc), unitName()], ["Circumference", fmt(C), unitName()],
+        ["Blank width", fmt(W), unitName()], ["Blank length", fmt(L), unitName()],
+        ["Sheet area", (area/1e6).toFixed(3), "m²"], ["Weight", sheetWeight(area).toFixed(2), "kg"]
+      ]);
+      $("cladOrds").innerHTML = "";
+      $("cladOrdsWrap").querySelector(".ord-title").textContent = "No ordinates needed — a straight jacket is a plain rectangle.";
+    }
+
+    function cladReducer(){
+      var D1 = dim("cr-d1"), D2 = dim("cr-d2"), Hh = dim("cr-h"), lap = Math.max(0, dim("cr-lap"));
+      if(!(D1>0) || !(D2>0) || !(Hh>0)){ setMsg("cladMsg","Diameters and reducer length must be positive.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); return; }
+      if(D2 >= D1){ setMsg("cladMsg","Small diameter must be smaller than the large diameter for a reducer.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); return; }
+      setMsg("cladMsg","");
+      var R1 = D1/2, R2 = D2/2;
+      var s = Math.sqrt(Hh*Hh + (R1-R2)*(R1-R2));            // slant height
+      var Lout = R1 * s / (R1 - R2), Lin = Lout - s;         // sector radii
+      var theta = 2*Math.PI*R1 / Lout;                        // sector angle (rad)
+      var lapAng = lap / Lout;
+      var a0 = -theta/2, a1 = theta/2 + lapAng;
+      // author sector centred below origin, then shift into positive coords
+      function pt(r, a){ return [ r*Math.sin(a), -r*Math.cos(a) ]; }
+      var raw = [];
+      var i, a;
+      for(i=0;i<=72;i++){ a = a0 + (a1-a0)*i/72; raw.push(pt(Lout, a)); }
+      for(i=72;i>=0;i--){ a = a0 + (a1-a0)*i/72; raw.push(pt(Lin, a)); }
+      var minX=1e9, minY=1e9, maxX=-1e9, maxY=-1e9;
+      raw.forEach(function(p){ minX=Math.min(minX,p[0]); maxX=Math.max(maxX,p[0]); minY=Math.min(minY,p[1]); maxY=Math.max(maxY,p[1]); });
+      var pts = raw.map(function(p){ return [p[0]-minX, p[1]-minY]; });
+      var lapLine = [ pt(Lout, theta/2), pt(Lin, theta/2) ].map(function(p){ return [p[0]-minX, p[1]-minY]; });
+      var paths = [{ pts:pts, closed:true, type:"cut" }];
+      if(lap>0) paths.push({ pts:lapLine, closed:false, type:"mark" });
+      PATTERNS.clad = { title:"Reducer cladding "+fmt(D1)+" → "+fmt(D2), width:maxX-minX, height:maxY-minY, paths:paths };
+      previewSVG(PATTERNS.clad, $("cladPreview"));
+      $("cladTitle").textContent = "Concentric reducer — "+fmt(D1)+" → "+fmt(D2)+" "+unitName();
+      $("cladCap").textContent = "Annular sector blank "+fmt(maxX-minX)+" × "+fmt(maxY-minY)+" "+unitName()+". Apex of the sector is the cone point — keep it off the sheet; only the band between the two arcs is cut.";
+      var area = (theta/2)*(Lout*Lout - Lin*Lin);
+      $("cladStats").innerHTML = statHTML([
+        ["Slant height", fmt(s), unitName()], ["Outer sector radius", fmt(Lout), unitName()],
+        ["Inner sector radius", fmt(Lin), unitName()], ["Sector angle", (theta*180/Math.PI).toFixed(1), "°"],
+        ["Sheet area", (area/1e6).toFixed(3), "m²"], ["Weight", sheetWeight(area).toFixed(2), "kg"]
+      ]);
+      var ords = "";
+      for(var k=0;k<=8;k++){
+        var frac = k/8, aa = -theta/2 + theta*frac;
+        ords += '<div class="ord"><div class="n">ARC '+(k+1)+' · '+(frac*100).toFixed(0)+'%</div><div class="a">outer arc '+fmt(frac*Math.PI*D1)+'</div><div class="b">radius '+fmt(Lout)+' / '+fmt(Lin)+'</div></div>';
+      }
+      $("cladOrds").innerHTML = ords;
+      $("cladOrdsWrap").querySelector(".ord-title").textContent = "Layout check — scribe both arcs from the sector apex with a trammel at these radii; the outer arc length must equal the large circumference ("+fmt(Math.PI*D1)+" "+unitName()+").";
+    }
+
+    function cladCap(){
+      var Dc = dim("cc-dc"), skirt = Math.max(0, dim("cc-skirt"));
+      if(!(Dc>0)){ setMsg("cladMsg","Diameter must be positive.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); return; }
+      setMsg("cladMsg","");
+      var Rout = Dc/2 + skirt, D = Rout*2;
+      function circle(r, n){
+        var pts=[]; for(var i=0;i<n;i++){ var a=i/n*2*Math.PI; pts.push([Rout + r*Math.cos(a), Rout + r*Math.sin(a)]); } return pts;
+      }
+      var paths = [{ pts:circle(Rout, 96), closed:true, type:"cut" }, { pts:circle(Dc/2, 96), closed:true, type:"mark" }];
+      PATTERNS.clad = { title:"End cap Ø"+fmt(Dc), width:D, height:D, paths:paths };
+      previewSVG(PATTERNS.clad, $("cladPreview"));
+      $("cladTitle").textContent = "Flat end cap — Ø "+fmt(Dc)+" "+unitName();
+      $("cladCap").textContent = "Cut disc Ø "+fmt(D)+"; fold or swage the skirt at the dashed circle (Ø "+fmt(Dc)+").";
+      var area = Math.PI*Dc*Dc/4;
+      $("cladStats").innerHTML = statHTML([
+        ["Ø over insulation", fmt(Dc), unitName()], ["Cut disc Ø", fmt(D), unitName()],
+        ["Skirt depth", fmt(skirt), unitName()], ["Face area", (area/1e6).toFixed(3), "m²"],
+        ["Weight (disc)", sheetWeight(Math.PI*Rout*Rout).toFixed(2), "kg"]
+      ]);
+      $("cladOrds").innerHTML = "";
+      $("cladOrdsWrap").querySelector(".ord-title").textContent = "No ordinates needed — scribe the two circles from one centre point.";
+    }
+
+    function renderClad(){
+      if(currentFit === "elbow") cladElbow();
+      else if(currentFit === "straight") cladStraight();
+      else if(currentFit === "reducer") cladReducer();
+      else cladCap();
+    }
+
+    /* ================= SADDLE ================= */
+    function saddleT(phi, R, r, sinA, cosA){
+      var inside = R*R - Math.pow(r*Math.sin(phi), 2);
+      if(inside < 0) return null;
+      return (Math.sqrt(inside) - r*Math.cos(phi)*cosA) / sinA;
+    }
+    function renderSaddle(){
+      var D = dim("sd-header"), d = dim("sd-branch"), A = num("sd-angle");
+      var margin = Math.max(0, dim("sd-margin"));
+      var divs = parseInt($("sd-div").value, 10);
+      if(!(D>0) || !(d>0) || !(A>15 && A<165)){ setMsg("saddleMsg","Header and branch diameters must be positive, and the angle between 15° and 165°.","err"); PATTERNS.saddle=null; previewSVG(null,$("saddlePreview")); return; }
+      if(d > D){ setMsg("saddleMsg","Branch is larger than the header — that joint is a header wrapping a branch, not a saddle. Swap the two diameters.","err"); PATTERNS.saddle=null; previewSVG(null,$("saddlePreview")); return; }
+      setMsg("saddleMsg", d/D > 0.85 ? "Branch is nearly the header's size — the curve gets very deep and fit-up is fussy. Double-check both ODs." : "", d/D > 0.85 ? "warn":"");
+      var R = D/2, r = d/2, Arad = A*Math.PI/180, sinA = Math.sin(Arad), cosA = Math.cos(Arad);
+      var Cb = Math.PI*d;
+      var tMax = -1e18, tMin = 1e18, i, phi, t;
+      for(i=0;i<=720;i++){ phi = i/720*2*Math.PI; t = saddleT(phi, R, r, sinA, cosA); if(t!==null){ tMax=Math.max(tMax,t); tMin=Math.min(tMin,t); } }
+      var depthMax = tMax - tMin;
+      var cutY = function(phi){ var tv = saddleT(phi, R, r, sinA, cosA); return margin + (tMax - tv); };
+      var curve = sampleCurve(function(tt){ var ph = tt*2*Math.PI; return [ tt*Cb, cutY(ph) ]; }, 144);
+      var H = margin + depthMax + 2;
+      var pts = [[0,0],[Cb,0]].concat(curve.slice().reverse()).concat([[0,0]]);
+      // outline: top edge -> right side down to curve end -> curve back -> close
+      var outline = [[0,0],[Cb,0],[Cb, cutY(2*Math.PI)]];
+      for(i=144;i>=0;i--) outline.push(curve[i]);
+      outline.push([0,0]);
+      var paths = [{ pts:outline, closed:true, type:"cut" }];
+      for(i=1;i<divs;i++){
+        var x = i/divs*Cb, ph2 = i/divs*2*Math.PI;
+        paths.push({ pts:[[x,0],[x,cutY(ph2)]], closed:false, type:"mark" });
+      }
+      PATTERNS.saddle = { title:"Saddle template branch Ø"+fmt(d)+" on header Ø"+fmt(D)+" at "+A+"°", width:Cb, height:H, paths:paths };
+      previewSVG(PATTERNS.saddle, $("saddlePreview"));
+      $("saddleTitle").textContent = "Branch wrap template — Ø "+fmt(d)+" on Ø "+fmt(D)+", "+A+"°";
+      $("saddleCap").textContent = "Template "+fmt(Cb)+" wide (branch circumference) × "+fmt(H)+" tall. Top edge is the square reference edge; cut along the curve.";
+      $("saddleStats").innerHTML = statHTML([
+        ["Branch circumference", fmt(Cb), unitName()],
+        ["Max cut depth", fmt(depthMax), unitName()],
+        ["Longest generator", fmt(tMax), unitName()+" from header centre"],
+        ["Shortest generator", fmt(tMin), unitName()+" from header centre"],
+        ["Angle", A, "°"]
+      ]);
+      var ords = "";
+      for(i=0;i<=divs;i++){
+        var ph3 = i/divs*2*Math.PI, xx = i/divs*Cb;
+        ords += '<div class="ord"><div class="n">DIV '+(i+1)+'</div><div class="a">around '+fmt(xx)+'</div><div class="b">depth '+fmt(cutY(ph3))+'</div></div>';
+      }
+      $("saddleOrds").innerHTML = ords;
+      // ---- header hole outline ----
+      var holePts = [], hxMin=1e18, hxMax=-1e18, haMin=1e18, haMax=-1e18;
+      for(i=0;i<=360;i++){
+        var ph4 = i/360*2*Math.PI, tv = saddleT(ph4, R, r, sinA, cosA);
+        var x = tv*cosA - r*Math.cos(ph4)*sinA;
+        var y = r*Math.sin(ph4);
+        var z = tv*sinA + r*Math.cos(ph4)*cosA;
+        var arc = R * Math.atan2(y, z);
+        holePts.push([x, arc]);
+        hxMin=Math.min(hxMin,x); hxMax=Math.max(hxMax,x); haMin=Math.min(haMin,arc); haMax=Math.max(haMax,arc);
+      }
+      var hw = hxMax-hxMin, hh = haMax-haMin;
+      var holePat = { title:"Header hole", width:hw, height:hh, paths:[{ pts: holePts.map(function(p){ return [p[0]-hxMin, p[1]-haMin]; }), closed:true, type:"cut" }] };
+      previewSVG(holePat, $("holePreview"));
+      $("holeStats").innerHTML = statHTML([
+        ["Hole length along header", fmt(hw), unitName()],
+        ["Hole width around header", fmt(hh), unitName()+" of arc"],
+        ["Header circumference", fmt(Math.PI*D), unitName()]
+      ]);
+    }
+
+    /* ================= OFFSET ================= */
+    function renderOffset(){
+      var off = dim("of-offset"), roll = dim("of-roll");
+      var sel = $("of-angle").value;
+      $("of-customWrap").style.display = sel === "custom" ? "block" : "none";
+      var ang = sel === "custom" ? num("of-angnum") : parseFloat(sel);
+      if(!(ang>0 && ang<90)){ setMsg("offsetMsg","Elbow angle must be between 0° and 90° (exclusive).","err"); $("offsetStats").innerHTML=""; return; }
+      setMsg("offsetMsg","");
+      var trueOff = Math.sqrt(off*off + roll*roll);
+      var rad = ang*Math.PI/180;
+      var travel = trueOff / Math.sin(rad);
+      var run = trueOff / Math.tan(rad);
+      $("offsetStats").innerHTML = statHTML([
+        ["True offset", fmt(trueOff), unitName()],
+        ["Travel (centre–centre)", fmt(travel), unitName()],
+        ["Run / advance", fmt(run), unitName()],
+        ["Offset direction", (Math.atan2(roll, off)*180/Math.PI).toFixed(1), "° from flat"]
+      ]);
+      // simple diagram: two parallel runs + diagonal travel
+      var W = 320, Hh = 190, x0 = 30, yBot = 150, yTop = 50, diag = 170;
+      var k = roll > 0 ? 0.55 : 0;
+      var svg = '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="Offset diagram">';
+      svg += '<line x1="'+x0+'" y1="'+yBot+'" x2="'+(x0+90)+'" y2="'+yBot+'" stroke="var(--steel)" stroke-width="7" stroke-linecap="round"/>';
+      svg += '<line x1="'+(x0+90+diag)+'" y1="'+yTop+'" x2="'+(x0+90+diag+80)+'" y2="'+yTop+'" stroke="var(--steel)" stroke-width="7" stroke-linecap="round"/>';
+      svg += '<line x1="'+(x0+90)+'" y1="'+yBot+'" x2="'+(x0+90+diag)+'" y2="'+yTop+'" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"/>';
+      svg += '<line x1="'+(x0+90)+'" y1="'+yBot+'" x2="'+(x0+90+diag)+'" y2="'+yBot+'" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="5 4"/>';
+      svg += '<text x="'+(x0+90+diag/2 - 18)+'" y="'+(yBot-58)+'" font-size="12" fill="var(--ink)" font-family="IBM Plex Mono">travel</text>';
+      svg += '<text x="'+(x0+90+diag/2 - 12)+'" y="'+(yBot+18)+'" font-size="12" fill="var(--ink)" font-family="IBM Plex Mono">run</text>';
+      svg += '<text x="'+(x0+90+diag+8)+'" y="'+((yBot+yTop)/2+4)+'" font-size="12" fill="var(--ink)" font-family="IBM Plex Mono">offset</text>';
+      svg += '<line x1="'+(x0+90+diag+2)+'" y1="'+yTop+'" x2="'+(x0+90+diag+2)+'" y2="'+yBot+'" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="5 4"/>';
+      svg += "</svg>";
+      $("offsetPreview").innerHTML = svg;
+    }
+
+    /* ================= wiring ================= */
+    function renderAll(){ renderClad(); renderSaddle(); renderOffset(); }
+    document.querySelectorAll("#tool-clad input, #tool-clad select").forEach(function(el){
+      el.addEventListener("input", renderClad); el.addEventListener("change", renderClad);
+    });
+    document.querySelectorAll("#tool-saddle input, #tool-saddle select").forEach(function(el){
+      el.addEventListener("input", renderSaddle); el.addEventListener("change", renderSaddle);
+    });
+    document.querySelectorAll("#tool-offset input, #tool-offset select").forEach(function(el){
+      el.addEventListener("input", renderOffset); el.addEventListener("change", renderOffset);
+    });
+    renderAll();
+    </script>
+
+    <script>
+    "use strict";
+    /* ================= rotating 3D previews (Three.js r128 via CDN) =================
+       One small auto-rotating model per tool, built from the SAME inputs as the
+       2D pattern (same dim()/num() reads the pattern functions use), so the
+       preview always matches the pattern. The render functions above are wrapped
+       — not edited — so every input change rebuilds the model live. If Three.js
+       fails to load, each box shows a note + retry button and nothing else breaks. */
+    var P3D = (function(){
+      var CDN = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+      var THREE3 = window.THREE || null;
+      var boxes = {};   // key -> {stage, cap, renderer, scene, camera, group, dragging, lastX, lastY, holdUntil}
+      var rafStarted = false;
+      var MATS = null;
+
+      function mats(){
+        if(MATS || !THREE3) return MATS;
+        MATS = {
+          steel: new THREE3.MeshStandardMaterial({ color:0x3d6f92, metalness:0.55, roughness:0.42, side:THREE3.DoubleSide }),
+          accent: new THREE3.MeshStandardMaterial({ color:0xd9480f, metalness:0.45, roughness:0.5, side:THREE3.DoubleSide }),
+          seam: new THREE3.MeshStandardMaterial({ color:0x18222b, metalness:0.3, roughness:0.6 })
+        };
+        return MATS;
+      }
+      function disposeGroup(g){
+        g.traverse(function(o){ if(o.geometry) o.geometry.dispose(); });
+      }
+      /* Centre the model on the origin and scale its longest side to 2 units,
+         so any pipe size fits the same camera. */
+      function fitGroup(g){
+        var bb = new THREE3.Box3().setFromObject(g);
+        var size = new THREE3.Vector3(); bb.getSize(size);
+        var c = new THREE3.Vector3(); bb.getCenter(c);
+        var maxDim = Math.max(size.x, size.y, size.z) || 1;
+        var s = 2.2 / maxDim;
+        g.scale.setScalar(s);
+        g.position.set(-c.x*s, -c.y*s, -c.z*s);
+      }
+      function tube(a, b, r, mat){
+        var dir = new THREE3.Vector3().subVectors(b, a);
+        var len = dir.length();
+        var mesh = new THREE3.Mesh(new THREE3.CylinderGeometry(r, r, len, 32), mat);
+        mesh.position.copy(a).addScaledVector(dir, 0.5);
+        mesh.quaternion.setFromUnitVectors(new THREE3.Vector3(0,1,0), dir.normalize());
+        return mesh;
+      }
+
+      /* ---------- model builders: same inputs as the pattern ---------- */
+      function buildClad(){
+        var g = new THREE3.Group(), m = mats(), cap = "";
+        if(currentFit === "elbow"){
+          var od = dim("ce-od"), ins = dim("ce-ins"), Rc = dim("ce-rc");
+          var B = num("ce-bend"), P = Math.round(num("ce-pieces")), T = dim("ce-tangent");
+          var Dc = od + 2*ins, R = Dc/2;
+          if(!(od>0) || !(Dc>0) || !(Rc>0) || !(B>0) || P<2 || Rc<=R) return null;
+          var arc = B*Math.PI/180;
+          g.add(new THREE3.Mesh(new THREE3.TorusGeometry(Rc, R, 28, 72, arc), m.steel));
+          var j, a;
+          for(j=1;j<P;j++){   // dark seam band at each gore joint (end gores span half a joint angle)
+            a = arc*(j-0.5)/(P-1);
+            var seam = new THREE3.Mesh(new THREE3.TorusGeometry(Rc, R + Math.max(0.6, R*0.012), 10, 48, 0.035), m.seam);
+            seam.rotation.z = a - 0.0175;
+            g.add(seam);
+          }
+          if(T > 0){
+            var p1 = new THREE3.Vector3(Rc, 0, 0), t1 = new THREE3.Vector3(0, 1, 0);
+            g.add(tube(p1, p1.clone().addScaledVector(t1, T), R, m.steel));
+            var p2 = new THREE3.Vector3(Rc*Math.cos(arc), Rc*Math.sin(arc), 0);
+            var t2 = new THREE3.Vector3(-Math.sin(arc), Math.cos(arc), 0);
+            g.add(tube(p2, p2.clone().addScaledVector(t2, T), R, m.steel));
+          }
+          cap = B + "° elbow · Ø " + fmt(Dc) + " " + unitName() + " over insulation · " + P + " gores · R " + fmt(Rc) + " " + unitName() + (T>0 ? " · tangent " + fmt(T) + " " + unitName() : "");
+        } else if(currentFit === "straight"){
+          var Dc2 = dim("cs-dc"), L = dim("cs-len");
+          if(!(Dc2>0) || !(L>0)) return null;
+          var cyl = new THREE3.Mesh(new THREE3.CylinderGeometry(Dc2/2, Dc2/2, L, 48), m.steel);
+          cyl.rotation.z = Math.PI/2;
+          g.add(cyl);
+          cap = "Straight jacket · Ø " + fmt(Dc2) + " × " + fmt(L) + " " + unitName();
+        } else if(currentFit === "reducer"){
+          var D1 = dim("cr-d1"), D2 = dim("cr-d2"), Hh = dim("cr-h");
+          if(!(D1>0) || !(D2>0) || !(Hh>0) || D2>=D1) return null;
+          var cone = new THREE3.Mesh(new THREE3.CylinderGeometry(D2/2, D1/2, Hh, 64), m.steel);
+          cone.rotation.z = Math.PI/2;
+          g.add(cone);
+          cap = "Concentric reducer · Ø " + fmt(D1) + " → Ø " + fmt(D2) + " " + unitName() + " · " + fmt(Hh) + " " + unitName() + " long";
+        } else {   // end cap: flat disc + skirt, as a lathe profile
+          var Dc3 = dim("cc-dc"), skirt = Math.max(0, dim("cc-skirt"));
+          if(!(Dc3>0)) return null;
+          var R3 = Dc3/2;
+          var pts = [ new THREE3.Vector2(0.001, skirt), new THREE3.Vector2(R3, skirt), new THREE3.Vector2(R3, 0) ];
+          g.add(new THREE3.Mesh(new THREE3.LatheGeometry(pts, 64), m.steel));
+          cap = "Flat end cap · Ø " + fmt(Dc3) + " " + unitName() + " · skirt " + fmt(skirt) + " " + unitName();
+        }
+        return { g:g, cap:cap };
+      }
+      function buildSaddle(){
+        var D = dim("sd-header"), d = dim("sd-branch"), A = num("sd-angle");
+        if(!(D>0) || !(d>0) || !(A>15 && A<165) || d>D) return null;
+        var R = D/2, r = d/2, Arad = A*Math.PI/180, m = mats();
+        var g = new THREE3.Group();
+        var Lh = Math.max(3*R, 2.6*d);   // header long enough to read as a run
+        var header = new THREE3.Mesh(new THREE3.CylinderGeometry(R, R, Lh, 48), m.steel);
+        header.rotation.z = Math.PI/2;   // header axis along X
+        g.add(header);
+        var u = new THREE3.Vector3(Math.cos(Arad), Math.sin(Arad), 0);  // branch axis, A from header axis
+        var Lb = R + 3*r;
+        var branch = new THREE3.Mesh(new THREE3.CylinderGeometry(r, r, Lb, 48), m.accent);
+        branch.position.copy(u).multiplyScalar(Lb/2 - R*0.7);   // foot sinks into the header
+        branch.quaternion.setFromUnitVectors(new THREE3.Vector3(0,1,0), u);
+        g.add(branch);
+        return { g:g, cap:"Ø " + fmt(d) + " branch on Ø " + fmt(D) + " header · " + A + "°" };
+      }
+      function buildOffset(){
+        var off = dim("of-offset"), roll = dim("of-roll");
+        var sel = $("of-angle").value;
+        var ang = sel === "custom" ? num("of-angnum") : parseFloat(sel);
+        if(!(ang>0 && ang<90)) return null;
+        var trueOff = Math.sqrt(off*off + roll*roll);
+        if(!(trueOff>0)) return null;
+        var rad = ang*Math.PI/180;
+        var travel = trueOff/Math.sin(rad), run = trueOff/Math.tan(rad);
+        var m = mats(), g = new THREE3.Group();
+        var rp = Math.max(6, Math.min(40, trueOff*0.09));   // nominal pipe size — the offset tool has no diameter input
+        var leg = Math.max(0.35*travel, 80);   // short run stubs, so the offset shape fills the view
+        var A = new THREE3.Vector3(0, 0, 0), B = new THREE3.Vector3(run, off, roll);
+        g.add(tube(new THREE3.Vector3(-leg, 0, 0), A, rp, m.steel));
+        g.add(tube(A, B, rp, m.accent));
+        g.add(tube(B, new THREE3.Vector3(B.x+leg, off, roll), rp, m.steel));
+        [A, B].forEach(function(p){
+          var s = new THREE3.Mesh(new THREE3.SphereGeometry(rp*1.03, 24, 18), m.steel);
+          s.position.copy(p); g.add(s);
+        });
+        return { g:g, cap:"Offset " + fmt(off) + " · roll " + fmt(roll) + " · " + ang + "° elbows · travel " + fmt(travel) + " " + unitName() + " (pipe shown at nominal size — no diameter input here)" };
+      }
+
+      /* ---------- box lifecycle ---------- */
+      function showFallback(box, msg){
+        box.stage.innerHTML = '<div class="p3d-fallback"><span>' + (msg || "3D preview needs Three.js from the CDN — check your connection, then retry.") + '</span><button type="button">Retry 3D preview</button></div>';
+        box.cap.textContent = "";
+        var btn = box.stage.querySelector("button");
+        if(btn) btn.addEventListener("click", function(){ retryLoad(); });
+      }
+      function loadThree(cb){
+        if(window.THREE){ THREE3 = window.THREE; cb(true); return; }
+        var s = document.createElement("script");
+        s.src = CDN;
+        s.onload = function(){ THREE3 = window.THREE || null; cb(!!THREE3); };
+        s.onerror = function(){ cb(false); };
+        document.head.appendChild(s);
+      }
+      function retryLoad(){
+        loadThree(function(ok){
+          if(!ok){ Object.keys(boxes).forEach(function(k){ if(!boxes[k].renderer) showFallback(boxes[k]); }); return; }
+          Object.keys(boxes).forEach(function(k){
+            if(!boxes[k].renderer){ initBox(k); update(k); }
+          });
+          ensureLoop();
+        });
+      }
+      function initBox(key){
+        var box = { key:key, stage:$(key+"3d"), cap:$(key+"3dCap"), renderer:null, scene:null, camera:null, group:null, dragging:false, lastX:0, lastY:0, holdUntil:0 };
+        boxes[key] = box;
+        box.stage.innerHTML = "";
+        if(!THREE3){ showFallback(box); return; }
+        try{
+          var renderer = new THREE3.WebGLRenderer({ antialias:true, alpha:true });
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+          box.stage.appendChild(renderer.domElement);
+          box.renderer = renderer;
+        }catch(e){
+          showFallback(box, "WebGL is not available in this browser, so the 3D preview can't draw.");
+          return;
+        }
+        box.scene = new THREE3.Scene();
+        box.camera = new THREE3.PerspectiveCamera(38, 1, 0.1, 100);
+        box.camera.position.set(2.3, 1.5, 2.9);
+        box.camera.lookAt(0, 0, 0);
+        box.scene.add(new THREE3.AmbientLight(0xffffff, 0.75));
+        var d1 = new THREE3.DirectionalLight(0xffffff, 0.9); d1.position.set(2, 3, 4); box.scene.add(d1);
+        var d2 = new THREE3.DirectionalLight(0xffffff, 0.35); d2.position.set(-3, -1, -2); box.scene.add(d2);
+        var cv = renderer.domElement;
+        cv.addEventListener("pointerdown", function(e){
+          box.dragging = true; box.lastX = e.clientX; box.lastY = e.clientY;
+          try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+        });
+        cv.addEventListener("pointermove", function(e){
+          if(!box.dragging || !box.group) return;
+          var dx = e.clientX - box.lastX, dy = e.clientY - box.lastY;
+          box.lastX = e.clientX; box.lastY = e.clientY;
+          box.group.rotation.y += dx*0.01;
+          box.group.rotation.x = Math.max(-1.2, Math.min(1.2, box.group.rotation.x + dy*0.005));
+        });
+        var endDrag = function(){ if(box.dragging){ box.dragging = false; box.holdUntil = Date.now()+2000; } };
+        cv.addEventListener("pointerup", endDrag);
+        cv.addEventListener("pointercancel", endDrag);
+        layout(key);
+      }
+      function layout(key){
+        var box = boxes[key];
+        if(!box || !box.renderer) return;
+        var w = box.stage.clientWidth, h = box.stage.clientHeight;
+        if(!w || !h) return;
+        box.renderer.setSize(w, h, false);
+        box.camera.aspect = w/h;
+        box.camera.updateProjectionMatrix();
+      }
+      function update(key){
+        var box = boxes[key];
+        if(!box || !THREE3 || !box.renderer || !box.scene) return;   // WebGL failed -> fallback stays, never throw
+        var built = key === "clad" ? buildClad() : key === "saddle" ? buildSaddle() : buildOffset();
+        if(box.group){ box.scene.remove(box.group); disposeGroup(box.group); box.group = null; }
+        if(!built){ box.cap.textContent = "Set valid inputs to see the 3D shape."; return; }
+        box.group = built.g;
+        box.scene.add(box.group);
+        fitGroup(box.group);
+        box.cap.textContent = built.cap;
+      }
+      function tick(){
+        requestAnimationFrame(tick);
+        if(document.hidden) return;
+        var now = Date.now();
+        Object.keys(boxes).forEach(function(k){
+          var box = boxes[k];
+          if(!box.renderer || !box.group) return;
+          if(box.stage.offsetWidth === 0) return;   // its tool tab is hidden
+          var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          if(!box.dragging && !reduceMotion && now > box.holdUntil) box.group.rotation.y += 0.005;  // slow auto-rotate
+          box.renderer.render(box.scene, box.camera);
+        });
+      }
+      function ensureLoop(){
+        if(!rafStarted){ rafStarted = true; requestAnimationFrame(tick); }
+      }
+
+      /* ---------- wire in: wrap the pattern renders (no pattern code touched) ----------
+         NOTE: the input listeners in the pattern script captured the original
+         render functions by reference, so reassigning the globals alone would
+         NOT fire on typing. The extra listeners below run after the pattern's
+         own (registered first), so the model rebuilds on every input event. */
+      var _renderClad = renderClad, _renderSaddle = renderSaddle, _renderOffset = renderOffset;
+      renderClad = function(){ _renderClad(); update("clad"); };
+      renderSaddle = function(){ _renderSaddle(); update("saddle"); };
+      renderOffset = function(){ _renderOffset(); update("offset"); };
+      document.querySelectorAll("#tool-clad input, #tool-clad select").forEach(function(el){
+        el.addEventListener("input", function(){ update("clad"); });
+        el.addEventListener("change", function(){ update("clad"); });
+      });
+      document.querySelectorAll("#tool-saddle input, #tool-saddle select").forEach(function(el){
+        el.addEventListener("input", function(){ update("saddle"); });
+        el.addEventListener("change", function(){ update("saddle"); });
+      });
+      document.querySelectorAll("#tool-offset input, #tool-offset select").forEach(function(el){
+        el.addEventListener("input", function(){ update("offset"); });
+        el.addEventListener("change", function(){ update("offset"); });
+      });
+
+      initBox("clad"); initBox("saddle"); initBox("offset");
+      update("clad"); update("saddle"); update("offset");
+      ensureLoop();
+
+      /* Re-size the newly visible canvas when a tab opens (it was 0-wide while hidden). */
+      document.querySelectorAll(".tabs [data-tool]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var k = btn.getAttribute("data-tool");
+          if(k === "sizes") return;
+          requestAnimationFrame(function(){ layout(k); });
+        });
+      });
+      document.querySelectorAll(".subtabs [data-fit]").forEach(function(btn){
+        btn.addEventListener("click", function(){ requestAnimationFrame(function(){ layout("clad"); }); });
+      });
+      window.addEventListener("resize", function(){ ["clad","saddle","offset"].forEach(layout); });
+
+      /* Probe handle (not user-facing): lets automated checks read rotation + state. */
+      window.__p3d = {
+        ready: function(){ return !!THREE3; },
+        hasRenderer: function(k){ return !!(boxes[k] && boxes[k].renderer); },
+        rotationY: function(k){ var b = boxes[k]; return (b && b.group) ? b.group.rotation.y : null; },
+        caption: function(k){ var b = boxes[k]; return b ? b.cap.textContent : ""; },
+        childCount: function(k){ var b = boxes[k]; return (b && b.group) ? b.group.children.length : 0; }
+      };
+      return { update:update, layout:layout, boxes:boxes };
+    })();
+    </script>
+  </body>
+</html>
