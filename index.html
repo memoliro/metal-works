@@ -266,7 +266,7 @@
                   <div class="field"><label for="ce-ins">Insulation <span class="u-lab">(mm)</span></label><input class="dim" id="ce-ins" type="number" step="any" value="50" /></div>
                 </div>
                 <div class="grid2">
-                  <div class="field"><label for="ce-rc">Bend centreline radius <span class="u-lab">(mm)</span></label><input class="dim" id="ce-rc" type="number" step="any" value="229" /><span class="hint">Long radius ≈ 1.5 × nominal bore</span></div>
+                  <div class="field"><label for="ce-rc">Bend centreline radius <span class="u-lab">(mm)</span></label><input class="dim" id="ce-rc" type="number" step="any" value="229" /><span class="hint">Long radius ≈ 1.5 × OD</span></div>
                   <div class="field"><label for="ce-bend">Bend angle (°)</label><input id="ce-bend" type="number" step="any" value="90" /></div>
                 </div>
                 <div class="grid2">
@@ -646,6 +646,34 @@
       ["DN 400","16",406.4,406.4], ["DN 450","18",457.0,457.0], ["DN 500","20",508.0,508.0],
       ["DN 600","24",610.0,610.0]
     ];
+    /* Elbow preset picks must not land on an impossible bend: if the current
+       centreline radius is no larger than the new cladding radius, raise it
+       to the long radius (1.5 x OD). A valid custom radius is never touched;
+       typing (not a preset pick) never auto-raises — the error path covers it.
+       1.5 x OD alone does not guarantee validity (1.5*OD > R only when
+       OD > insulation), so small pipes take the R+1 floor instead. The
+       result is rounded to 3 decimals so the input never shows a float
+       artefact like 533.4000000000001. */
+    function maybeRaiseRc(newOdMm){
+      var R = (newOdMm + 2*dim("ce-ins")) / 2;
+      if(dim("ce-rc") <= R){
+        var raised = Math.round(Math.max(1.5 * newOdMm, R + 1) * 1000) / 1000;
+        $("ce-rc").value = unit === "in" ? (raised/25.4).toFixed(3) : raised;
+        return raised;
+      }
+      return null;
+    }
+    var pendingRaise = null;   // latest preset raise awaiting its deferred note
+    /* The raise note, shown only when the recalc actually produced a pattern:
+       on an error path the red error must stand, never an info note. */
+    function raiseNoteText(raised, newOdMm){
+      var why = Math.abs(raised - 1.5 * newOdMm) < 0.001 ? "long radius, 1.5 × OD" : "minimum that clears the cladding";
+      return "Bend radius raised to "+fmt(raised)+" "+unitName()+" ("+why+") — the previous radius was too tight for this pipe.";
+    }
+    function showRaiseNote(raised, newOdMm, prefix){
+      if(!PATTERNS.clad) return;
+      setMsg("cladMsg", (prefix || "") + raiseNoteText(raised, newOdMm), "info");
+    }
     function fillPreset(selId, targetId){
       var sel = $(selId);
       var g1 = document.createElement("optgroup"); g1.label = "NPS — ASME B36.10";
@@ -662,16 +690,36 @@
         if(!sel.value) return;
         var mm = parseFloat(sel.value);
         $(targetId).value = unit === "in" ? (mm/25.4).toFixed(3) : mm;
+        var raised = null;
+        if(selId === "ce-preset") raised = maybeRaiseRc(mm);
         $(targetId).dispatchEvent(new Event("input"));
+        if(raised !== null){
+          // Deferred: the generic change listener (wiring) fires renderClad
+          // AGAIN after this handler returns, and a successful recalc clears
+          // cladMsg — a synchronous note would never be visible. A newer
+          // pick supersedes a pending note, including a pick that needs no
+          // raise at all (its else branch clears pendingRaise below).
+          var note = { mm: mm, raised: raised };
+          pendingRaise = note;
+          setTimeout(function(){
+            if(pendingRaise !== note) return;
+            showRaiseNote(note.raised, note.mm);
+          }, 0);
+        } else pendingRaise = null;
       });
     }
     fillPreset("ce-preset","ce-od"); fillPreset("sd-preset-h","sd-header"); fillPreset("sd-preset-b","sd-branch");
     function useOD(mm, label){
       $("ce-preset").value = "";
       $("ce-od").value = unit === "in" ? (mm/25.4).toFixed(3) : mm;
+      var raised = maybeRaiseRc(mm);
       $("ce-od").dispatchEvent(new Event("input"));
       document.querySelector('.tabs [data-tool="clad"]').click();
-      setMsg("cladMsg", label + " loaded as the cladding Pipe OD. Add the insulation thickness next to it, and the pattern above is updated.", "info");
+      pendingRaise = null;   // a Use pick supersedes any pending preset note
+      // Never let an info note overwrite a real error: if the recalc errored
+      // (small-OD corner, pieces < 2, …) the red error stands as-is.
+      if(raised !== null) showRaiseNote(raised, mm, label + " loaded as the cladding Pipe OD. ");
+      else if(PATTERNS.clad) setMsg("cladMsg", label + " loaded as the cladding Pipe OD. Add the insulation thickness next to it, and the pattern above is updated.", "info");
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
     $("sizesBody").innerHTML = NPS.map(function(r){
@@ -1033,13 +1081,28 @@
     }
 
     /* ================= CLADDING ================= */
+    /* Error paths must not leave the previous size's numbers standing as if
+       they belonged to the current selection — clear stats, ordinates, the
+       blank caption and the ordinates note with them. */
+    function clearCladOutputs(pieces){
+      $("cladStats").innerHTML = "";
+      $("cladOrds").innerHTML = "";
+      $("cladCap").textContent = "";
+      $("cladOrdNote").textContent = "";
+      $("cladTitle").textContent = "No valid pattern";
+      $("cladOrdsWrap").querySelector(".ord-title").textContent = "No ordinates — the current inputs do not make a valid elbow.";
+      // The cut-count line must follow the piece input, not the previous
+      // valid case (P=1 used to keep showing "3 middle gores").
+      var mid = Math.max(0, Math.round(pieces || 0) - 2);
+      $("midCountHow").textContent = mid + " middle gore" + (mid === 1 ? "" : "s");
+    }
     function cladElbow(){
       var od = dim("ce-od"), ins = dim("ce-ins"), Rc = dim("ce-rc");
       var B = num("ce-bend"), P = Math.round(num("ce-pieces"));
       var T = dim("ce-tangent"), lap = Math.max(0, dim("ce-lap"));
       var Dc = od + 2*ins, R = Dc/2, C = Math.PI*Dc;
-      if(!(od>0) || !(Dc>0) || !(Rc>0) || !(B>0) || P<2) { setMsg("cladMsg","Check the elbow inputs — diameters, radius, angle and piece count must be positive.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); return; }
-      if(Rc <= R){ setMsg("cladMsg","Centreline radius must be larger than the cladding radius ("+fmt(R)+" "+unitName()+") — the throat would close up. Increase the bend radius.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); return; }
+      if(!(od>0) || !(Dc>0) || !(Rc>0) || !(B>0) || P<2) { setMsg("cladMsg","Check the elbow inputs — diameters, radius, angle and piece count must be positive.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); clearCladOutputs(P); return; }
+      if(Rc <= R){ setMsg("cladMsg","Centreline radius must be larger than the cladding radius ("+fmt(R)+" "+unitName()+") — the throat would close up. Increase the bend radius.","err"); PATTERNS.clad=null; previewSVG(null,$("cladPreview")); clearCladOutputs(P); return; }
       setMsg("cladMsg", Rc - R < 10 ? "Very tight throat: "+fmt(Rc-R)+" "+unitName()+" between bend centre and throat. Real elbows this tight are usually pressed, not gored." : "", Rc - R < 10 ? "warn" : "");
       var Dj = B/(P-1), m = Dj/2 * Math.PI/180, tanm = Math.tan(m);
       var piece = $("ce-piece").value;
@@ -1499,6 +1562,31 @@
           ensureLoop();
         });
       }
+      /* Software rasterizers (SwiftShader/llvmpipe/…) make EVERY frame slow,
+         so the gap-based trip in tick() would burn a multi-second unresponsive
+         window on every load before tripping — and every hard refresh restarts
+         it, so a size picked inside the window feels like the same freeze.
+         Detect it up front from the renderer's unmasked string and start in
+         slow-GL mode immediately. If the debug extension is unavailable the
+         gap-based trip is the fallback. Fast hardware GL keeps continuous
+         auto-rotate. */
+      function setSlowGL(){
+        if(slowGL) return;
+        slowGL = true;
+        document.querySelectorAll(".p3d-head span").forEach(function(s){
+          s.textContent = "drag to spin · auto-rotate off (slow graphics)";
+        });
+      }
+      function detectSlowGL(renderer){
+        if(slowGL) return;
+        try{
+          var gl = renderer.getContext();
+          var ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
+          if(!ext) return;
+          var who = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "";
+          if(/swiftshader|llvmpipe|softpipe|swrast|software|basic render driver/i.test(who)) setSlowGL();
+        }catch(_){ /* fall back to the gap-based trip in tick() */ }
+      }
       function initBox(key){
         var box = { key:key, stage:$(key+"3d"), cap:$(key+"3dCap"), renderer:null, scene:null, camera:null, group:null, dragging:false, lastX:0, lastY:0, holdUntil:0, dirty:false };
         boxes[key] = box;
@@ -1513,6 +1601,7 @@
           showFallback(box, "WebGL is not available in this browser, so the 3D preview can't draw.");
           return;
         }
+        detectSlowGL(renderer);   // software rasterizer? start parked, skip the trip window
         box.scene = new THREE3.Scene();
         box.camera = new THREE3.PerspectiveCamera(38, 1, 0.1, 100);
         box.camera.position.set(2.3, 1.5, 2.9);
@@ -1552,8 +1641,16 @@
         var box = boxes[key];
         if(!box || !THREE3 || !box.renderer || !box.scene) return;   // WebGL failed -> fallback stays, never throw
         var built = key === "clad" ? buildClad() : key === "saddle" ? buildSaddle() : buildOffset();
+        var hadGroup = !!box.group;
         if(box.group){ box.scene.remove(box.group); disposeGroup(box.group); box.group = null; }
-        if(!built){ box.cap.textContent = "Set valid inputs to see the 3D shape."; return; }
+        if(!built){
+          box.cap.textContent = "Set valid inputs to see the 3D shape.";
+          // The tick loop never renders a group-less box, so without this the
+          // canvas keeps showing the previous fitting's last frame. Render
+          // the now-empty scene once, right now, to clear it.
+          if(hadGroup) box.renderer.render(box.scene, box.camera);
+          return;
+        }
         box.group = built.g;
         box.scene.add(box.group);
         fitGroup(box.group);
@@ -1581,12 +1678,7 @@
         if(tickCount > 5){
           if(gap > 50){
             slowGaps++;
-            if(slowGaps >= 3 && !slowGL){
-              slowGL = true;
-              document.querySelectorAll(".p3d-head span").forEach(function(s){
-                s.textContent = "drag to spin · auto-rotate off (slow graphics)";
-              });
-            }
+            if(slowGaps >= 3) setSlowGL();
           } else slowGaps = 0;
         }
         Object.keys(boxes).forEach(function(k){
