@@ -1347,6 +1347,8 @@
       var THREE3 = window.THREE || null;
       var boxes = {};   // key -> {stage, cap, renderer, scene, camera, group, dragging, lastX, lastY, holdUntil}
       var rafStarted = false;
+      var slowGL = false;   // set once the frame rate proves too slow for the always-on loop (see tick)
+      var lastTickMs = 0, tickCount = 0, slowGaps = 0;
       var MATS = null;
 
       function mats(){
@@ -1495,7 +1497,7 @@
         });
       }
       function initBox(key){
-        var box = { key:key, stage:$(key+"3d"), cap:$(key+"3dCap"), renderer:null, scene:null, camera:null, group:null, dragging:false, lastX:0, lastY:0, holdUntil:0 };
+        var box = { key:key, stage:$(key+"3d"), cap:$(key+"3dCap"), renderer:null, scene:null, camera:null, group:null, dragging:false, lastX:0, lastY:0, holdUntil:0, dirty:false };
         boxes[key] = box;
         box.stage.innerHTML = "";
         if(!THREE3){ showFallback(box); return; }
@@ -1526,6 +1528,7 @@
           box.lastX = e.clientX; box.lastY = e.clientY;
           box.group.rotation.y += dx*0.01;
           box.group.rotation.x = Math.max(-1.2, Math.min(1.2, box.group.rotation.x + dy*0.005));
+          box.dirty = true;   // re-render the dragged angle on the next frame
         });
         var endDrag = function(){ if(box.dragging){ box.dragging = false; box.holdUntil = Date.now()+2000; } };
         cv.addEventListener("pointerup", endDrag);
@@ -1540,6 +1543,7 @@
         box.renderer.setSize(w, h, false);
         box.camera.aspect = w/h;
         box.camera.updateProjectionMatrix();
+        box.dirty = true;   // re-render once at the new size
       }
       function update(key){
         var box = boxes[key];
@@ -1551,18 +1555,45 @@
         box.scene.add(box.group);
         fitGroup(box.group);
         box.cap.textContent = built.cap;
+        box.dirty = true;   // re-render the rebuilt model on the next frame
       }
       function tick(){
         requestAnimationFrame(tick);
+        // Frame pacing is the trip signal, not the render() call itself:
+        // render() returns fast (GL commands queue async) while the frame's
+        // software compositing blocks the main thread for ~90 ms — timing
+        // render() alone measured ~5 ms and never tripped. The gap between
+        // ticks IS the frame cost. Three slow gaps in a row after warmup
+        // (shader-compile spikes are one or two, and the first 5 ticks are
+        // warmup) switch the previews to render-on-demand for the session:
+        // auto-rotate stops, dragging and input changes still re-render
+        // immediately, and the page stays responsive. Fast machines sit at
+        // ~16 ms gaps and never trip this.
+        var nowMs = performance.now();
+        var gap = lastTickMs ? nowMs - lastTickMs : 0;
+        lastTickMs = nowMs;   // recorded even while hidden, so hidden time never false-trips
         if(document.hidden) return;
         var now = Date.now();
+        tickCount++;
+        if(tickCount > 5){
+          if(gap > 50){
+            slowGaps++;
+            if(slowGaps >= 3 && !slowGL){
+              slowGL = true;
+              document.querySelectorAll(".p3d-head span").forEach(function(s){
+                s.textContent = "drag to spin · auto-rotate off (slow graphics)";
+              });
+            }
+          } else slowGaps = 0;
+        }
         Object.keys(boxes).forEach(function(k){
           var box = boxes[k];
           if(!box.renderer || !box.group) return;
           if(box.stage.offsetWidth === 0) return;   // its tool tab is hidden
           var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-          if(!box.dragging && !reduceMotion && now > box.holdUntil) box.group.rotation.y += 0.005;  // slow auto-rotate
-          box.renderer.render(box.scene, box.camera);
+          var spinning = !box.dragging && !reduceMotion && now > box.holdUntil && !slowGL;
+          if(spinning) box.group.rotation.y += 0.005;  // slow auto-rotate
+          if(spinning || box.dirty){ box.renderer.render(box.scene, box.camera); box.dirty = false; }
         });
       }
       function ensureLoop(){
