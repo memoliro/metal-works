@@ -1054,13 +1054,16 @@
         topPts = sampleCurve(function(t){ var u = u0 + (u1-u0)*t; return [ (u+Math.PI)*R, endH(u) ]; }, 96);
         H = endH(0);
         pts = topPts.concat([[ (u1+Math.PI)*R, 0 ],[ 0, 0 ]]);
-        areaAvg = C * (Rc*tanm + T);
+        // Area is the full cut blank: width C+lap (the pattern curve runs
+        // on into the lap strip) x mean height. The lap is real material,
+        // same treatment as the jacket (W = C+lap) and reducer (theta+lapAng).
+        areaAvg = (C + lap) * (Rc*tanm + T);
       } else {
         topPts = sampleCurve(function(t){ var u = u0 + (u1-u0)*t; return [ (u+Math.PI)*R, midTop(u) ]; }, 96);
         botPts = sampleCurve(function(t){ var u = u1 - (u1-u0)*t; return [ (u+Math.PI)*R, midBot(u) ]; }, 96);
         H = midTop(0);
         pts = topPts.concat(botPts);
-        areaAvg = C * 2 * Rc * tanm;
+        areaAvg = (C + lap) * 2 * Rc * tanm;
       }
       var paths = [{ pts: pts, closed:true, type:"cut" }];
       if(lap > 0){
